@@ -39,7 +39,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\nLogging in...");
     match client.login(&username, &password).await {
-        Ok(token) => println!("Login successful! Token: {}", token.token),
+        Ok(token) => {
+            println!("Login successful! Token: {}", token.token);
+
+            println!("\nGetting current user...");
+            match client.get_current_user().await {
+                Ok(user) => println!("Current user: {} ({})", user.username, user.email),
+                Err(e) => println!("x Error getting current user: {}", e),
+            }
+        }
         Err(e) => println!("x Login error: {}", e),
     }
 

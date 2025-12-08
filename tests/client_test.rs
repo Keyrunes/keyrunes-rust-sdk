@@ -154,3 +154,99 @@ async fn test_register_and_login_flow() {
     register_mock.assert_async().await;
     login_mock.assert_async().await;
 }
+
+#[tokio::test]
+async fn test_set_token() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer test-token-123")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"user_id":999,"username":"test","email":"test@example.com","groups":[]}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+
+    // #act
+    client.set_token("test-token-123").await;
+    let user = client.get_current_user().await;
+
+    // #assert
+    assert!(user.is_ok());
+    assert_eq!(user.unwrap().username, "test");
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_current_user_success() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer test-token-456")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"user_id":123,"username":"john","email":"john@example.com","groups":["users"]}"#,
+        )
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token-456").await;
+
+    // #act
+    let result = client.get_current_user().await;
+
+    // #assert
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.id, "123");
+    assert_eq!(user.username, "john");
+    assert_eq!(user.email, "john@example.com");
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_current_user_no_token() {
+    // #setup
+    let client = KeyrunesClient::new("https://example.com").unwrap();
+
+    // #act
+    let result = client.get_current_user().await;
+
+    // #assert
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::InvalidToken));
+}
+
+#[tokio::test]
+async fn test_get_current_user_unauthorized() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer invalid-token")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Invalid token"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("invalid-token").await;
+
+    // #act
+    let result = client.get_current_user().await;
+
+    // #assert
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        KeyrunesError::AuthenticationError(_)
+    ));
+    mock.assert_async().await;
+}

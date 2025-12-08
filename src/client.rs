@@ -187,6 +187,65 @@ impl KeyrunesClient {
         Ok(crate::models::User::from(register_response.user))
     }
 
+    /// Sets the authentication token manually.
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - JWT authentication token
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// client.set_token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...").await;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn set_token<S: Into<String>>(&self, token: S) {
+        *self.token.write().await = Some(token.into());
+    }
+
+    /// Gets the current authenticated user.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<User, KeyrunesError>`:
+    /// - `Ok(user)` if the user was successfully retrieved
+    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated or token is invalid
+    /// - `Err(KeyrunesError::NetworkError)` if there was a network error
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let token = client.login("user@example.com", "password123").await?;
+    /// let user = client.get_current_user().await?;
+    /// println!("Current user: {} ({})", user.username, user.email);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_current_user(&self) -> Result<User> {
+        let token = self.token.read().await;
+        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
+
+        let url = format!("{}/api/me", self.base_url);
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token_value))
+            .send()
+            .await?;
+
+        let user_response = self
+            .handle_response::<crate::models::UserResponse>(response)
+            .await?;
+        Ok(crate::models::User::from(user_response))
+    }
+
     async fn handle_response<T: for<'de> serde::Deserialize<'de>>(
         &self,
         response: reqwest::Response,
