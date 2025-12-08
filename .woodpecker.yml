@@ -1,0 +1,64 @@
+when:
+  event: [push, pull_request]
+
+steps:
+  - name: Checkout
+    image: alpine/git
+    commands:
+      - git clone $CI_REPO_CLONE_URL .
+      - git checkout $CI_COMMIT_SHA
+
+  - name: Rust Setup
+    image: rust:1.75
+    commands:
+      - rustup component add rustfmt clippy
+      - rustc --version
+      - cargo --version
+
+  - name: Format Check
+    image: rust:1.75
+    commands:
+      - cargo fmt --all -- --check
+
+  - name: Clippy
+    image: rust:1.75
+    commands:
+      - cargo clippy --all-targets --all-features -- -D warnings
+
+  - name: Security Audit
+    image: rust:1.75
+    commands:
+      - cargo install cargo-audit --locked
+      - cargo audit
+
+  - name: Build
+    image: rust:1.75
+    commands:
+      - cargo build --all-features --verbose
+
+  - name: Test
+    image: rust:1.75
+    commands:
+      - cargo test --all-features --verbose
+
+  - name: Coverage
+    image: rust:1.75
+    commands:
+      - cargo install cargo-llvm-cov --locked
+      - cargo llvm-cov --all-features --locked --lcov --output-path lcov.info
+      - cargo llvm-cov --all-features --locked --summary-only
+    coverage:
+      - lcov.info
+
+  - name: Coverage Check
+    image: rust:1.75
+    commands:
+      - cargo install cargo-llvm-cov --locked
+      - |
+        COVERAGE=$(cargo llvm-cov --all-features --locked --summary-only | grep -oP 'Total.*\K\d+\.\d+' | head -1)
+        echo "Coverage: ${COVERAGE}%"
+        if (( $(echo "$COVERAGE < 90" | bc -l) )); then
+          echo "Coverage is below 90%"
+          exit 1
+        fi
+

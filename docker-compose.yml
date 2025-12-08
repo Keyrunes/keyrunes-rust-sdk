@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  keyrunes:
+    image: keyrunes/keyrunes:latest
+    container_name: keyrunes-rust-sdk-keyrunes
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://keyrunes:keyrunes@postgres:5432/keyrunes
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=test-secret-key-change-in-production
+      - ADMIN_KEY=test-admin-key
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - keyrunes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: keyrunes-rust-sdk-postgres
+    environment:
+      - POSTGRES_USER=keyrunes
+      - POSTGRES_PASSWORD=keyrunes
+      - POSTGRES_DB=keyrunes
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - keyrunes-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keyrunes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: keyrunes-rust-sdk-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - keyrunes-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  keyrunes-network:
+    driver: bridge
+
