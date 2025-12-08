@@ -1,8 +1,6 @@
 //! Example usage of the Keyrunes SDK with Actix Web
 
-use actix_web::{
-    get, middleware, web, App, HttpResponse, HttpServer, Responder, Result as ActixResult,
-};
+use actix_web::{get, middleware, web, App, HttpResponse, HttpServer, Responder};
 use keyrunes_rust_sdk::{
     middleware::actix::{require_admin, AuthenticatedUser, KeyrunesState},
     KeyrunesClient,

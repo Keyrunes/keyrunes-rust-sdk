@@ -32,19 +32,35 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
     type Error = KeyrunesError;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let auth_header = request
-            .headers()
-            .get_one("authorization")
-            .ok_or_else(|| KeyrunesError::AuthenticationError("Token missing".to_string()))?;
+        let auth_header = match request.headers().get_one("authorization") {
+            Some(header) => header,
+            None => {
+                return Outcome::Error((
+                    rocket::http::Status::Unauthorized,
+                    KeyrunesError::AuthenticationError("Token missing".to_string()),
+                ))
+            }
+        };
 
-        let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
-            KeyrunesError::AuthenticationError("Invalid token format".to_string())
-        })?;
+        let token = match auth_header.strip_prefix("Bearer ") {
+            Some(t) => t,
+            None => {
+                return Outcome::Error((
+                    rocket::http::Status::Unauthorized,
+                    KeyrunesError::AuthenticationError("Invalid token format".to_string()),
+                ))
+            }
+        };
 
-        let state = request
-            .guard::<&State<KeyrunesState>>()
-            .await
-            .map_err(|_| KeyrunesError::Other("Keyrunes state not configured".to_string()))?;
+        let state = match request.guard::<&State<KeyrunesState>>().await {
+            Outcome::Success(s) => s,
+            _ => {
+                return Outcome::Error((
+                    rocket::http::Status::InternalServerError,
+                    KeyrunesError::Other("Keyrunes state not configured".to_string()),
+                ))
+            }
+        };
 
         state.client.set_token(token.to_string()).await;
         match state.client.get_current_user().await {

@@ -237,6 +237,7 @@ pub struct LoginCredentials {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupCheck {
     /// Indicates whether the user belongs to the group
+    #[serde(alias = "has_access", alias = "has_group")]
     pub has_group: bool,
 }
 

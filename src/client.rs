@@ -246,6 +246,207 @@ impl KeyrunesClient {
         Ok(crate::models::User::from(user_response))
     }
 
+    /// Registers a new administrator user.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Username
+    /// * `email` - Administrator email
+    /// * `password` - Administrator password (minimum 8 characters)
+    /// * `admin_key` - Administrator registration key
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<User, KeyrunesError>`:
+    /// - `Ok(user)` if registration was successful
+    /// - `Err(KeyrunesError::AuthenticationError)` if admin key is invalid
+    /// - `Err(KeyrunesError::HttpError)` if there was an error in the request
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let admin = client.register_admin("admin_user", "admin@example.com", "password123", "admin-key-123").await?;
+    /// println!("Admin registered: {} ({})", admin.username, admin.email);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn register_admin<S: Into<String>>(
+        &self,
+        username: S,
+        email: S,
+        password: S,
+        admin_key: S,
+    ) -> Result<User> {
+        let url = format!("{}/api/register", self.base_url);
+        let registration = AdminRegistration {
+            username: username.into(),
+            email: email.into(),
+            password: password.into(),
+            admin_key: admin_key.into(),
+        };
+
+        let response = self.client.post(&url).json(&registration).send().await?;
+
+        let register_response: crate::models::RegisterResponse =
+            self.handle_response(response).await?;
+        Ok(crate::models::User::from(register_response.user))
+    }
+
+    /// Gets user information by ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - User ID
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<User, KeyrunesError>`:
+    /// - `Ok(user)` if the user was successfully retrieved
+    /// - `Err(KeyrunesError::UserNotFoundError)` if user doesn't exist
+    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated or token is invalid
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let token = client.login("user@example.com", "password123").await?;
+    /// let user = client.get_user("123").await?;
+    /// println!("User: {} ({})", user.username, user.email);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_user<S: Into<String>>(&self, user_id: S) -> Result<User> {
+        let token = self.token.read().await;
+        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
+
+        let user_id = user_id.into();
+        let url = format!("{}/api/users/{}", self.base_url, user_id);
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token_value))
+            .send()
+            .await?;
+
+        let user_response = self
+            .handle_response::<crate::models::UserResponse>(response)
+            .await?;
+        Ok(crate::models::User::from(user_response))
+    }
+
+    /// Verifies if a user belongs to a specific group.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - User ID
+    /// * `group_id` - Group ID
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<bool, KeyrunesError>`:
+    /// - `Ok(true)` if user belongs to the group
+    /// - `Ok(false)` if user doesn't belong to the group
+    /// - `Err(KeyrunesError::GroupNotFoundError)` if group doesn't exist
+    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let token = client.login("user@example.com", "password123").await?;
+    /// let has_access = client.has_group("123", "admins").await?;
+    /// if has_access {
+    ///     println!("User has admin access");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn has_group<U: Into<String>, G: Into<String>>(
+        &self,
+        user_id: U,
+        group_id: G,
+    ) -> Result<bool> {
+        let token = self.token.read().await;
+        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
+
+        let user_id = user_id.into();
+        let group_id = group_id.into();
+        let url = format!(
+            "{}/api/users/{}/groups/{}",
+            self.base_url, user_id, group_id
+        );
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token_value))
+            .send()
+            .await?;
+
+        let group_check = self.handle_response::<GroupCheck>(response).await?;
+        Ok(group_check.has_group)
+    }
+
+    /// Gets the list of groups for a user.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - User ID (optional, if None uses current user)
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<Vec<String>, KeyrunesError>`:
+    /// - `Ok(groups)` if the groups were successfully retrieved
+    /// - `Err(KeyrunesError::UserNotFoundError)` if user doesn't exist
+    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let token = client.login("user@example.com", "password123").await?;
+    /// let groups = client.get_user_groups(None::<&str>).await?;
+    /// println!("User groups: {:?}", groups);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_user_groups<S: Into<String>>(
+        &self,
+        user_id: Option<S>,
+    ) -> Result<Vec<String>> {
+        let user = if let Some(user_id) = user_id {
+            self.get_user(user_id).await?
+        } else {
+            self.get_current_user().await?
+        };
+        Ok(user.groups)
+    }
+
+    /// Clears the authentication token.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let token = client.login("user@example.com", "password123").await?;
+    /// client.clear_token().await;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn clear_token(&self) {
+        *self.token.write().await = None;
+    }
+
     async fn handle_response<T: for<'de> serde::Deserialize<'de>>(
         &self,
         response: reqwest::Response,

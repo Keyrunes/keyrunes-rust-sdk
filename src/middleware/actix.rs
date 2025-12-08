@@ -1,12 +1,13 @@
 //! Middleware for Actix Web integration
 
-use crate::{KeyrunesClient, KeyrunesError, User};
+use crate::{KeyrunesClient, User};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, FromRequest, HttpMessage,
 };
 use std::{
     future::{ready, Ready},
+    pin::Pin,
     rc::Rc,
     sync::Arc,
 };
@@ -80,7 +81,7 @@ where
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future = actix_web::dev::BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
 
     forward_ready!(service);
 
