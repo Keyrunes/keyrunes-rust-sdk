@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 authors = ["Jonatas Luiz de Oliveira <contact@jonatasoliveira.dev>"]
 description = "Rust SDK for Keyrunes authentication and authorization service"
-license = "AGPL"
+license = "AGPL-3.0"
 repository = "https://github.com/Keyrunes/keyrunes-rust-sdk"
 
 [dependencies]
