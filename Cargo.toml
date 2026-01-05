@@ -1,6 +1,6 @@
 [package]
 name = "keyrunes-rust-sdk"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 authors = ["Jonatas Luiz de Oliveira <contact@jonatasoliveira.dev>"]
 description = "Rust SDK for Keyrunes authentication and authorization service"
