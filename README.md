@@ -1,6 +1,7 @@
 # Keyrunes Rust SDK
 
 A Rust library for integrating with the Keyrunes authentication and authorization service.
+[crates.io](https://crates.io/crates/keyrunes-rust-sdk)
 
 ## Features
 
