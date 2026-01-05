@@ -65,6 +65,7 @@ fn test_login_credentials() {
     let creds = LoginCredentials {
         identity: "user@example.com".to_string(),
         password: "password123".to_string(),
+        namespace: "public".into(),
     };
 
     // #act
@@ -82,6 +83,7 @@ fn test_user_registration() {
         username: "john".to_string(),
         email: "john@example.com".to_string(),
         password: "password123".to_string(),
+        namespace: "public".into(),
     };
 
     // #act
@@ -101,6 +103,7 @@ fn test_admin_registration() {
         email: "admin@example.com".to_string(),
         password: "password123".to_string(),
         admin_key: "admin-key-123".to_string(),
+        namespace: "public".into(),
     };
 
     // #act

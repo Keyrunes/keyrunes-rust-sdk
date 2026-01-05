@@ -10,8 +10,8 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-//! let user = client.register("john", "john@example.com", "password123").await?;
-//! let token = client.login("john@example.com", "password123").await?;
+//! let user = client.register("john", "john@example.com", "password123", None).await?;
+//! let token = client.login("john@example.com", "password123", None).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -21,6 +21,15 @@ use crate::models::*;
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+// Constants
+const USER_AGENT: &str = "keyrunes-rust-sdk/0.1.0";
+const HEADER_ORG_KEY: &str = "X-Organization-Key";
+const ENV_ORG_KEY: &str = "KEYRUNES_ORG_KEY";
+
+const ENDPOINT_LOGIN: &str = "/api/login";
+const ENDPOINT_REGISTER: &str = "/api/register";
+const ENDPOINT_ME: &str = "/api/me";
 
 /// Client for interacting with the Keyrunes API
 ///
@@ -44,8 +53,8 @@ use tokio::sync::RwLock;
 /// # use keyrunes_rust_sdk::KeyrunesClient;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-/// let user = client.register("john", "john@example.com", "password123").await?;
-/// let token = client.login("john@example.com", "password123").await?;
+/// let user = client.register("john", "john@example.com", "password123", None).await?;
+/// let token = client.login("john@example.com", "password123", None).await?;
 /// println!("Token: {}", token.token);
 /// # Ok(())
 /// # }
@@ -92,10 +101,18 @@ impl KeyrunesClient {
         let base_url = base_url.into();
         url::Url::parse(&base_url)?;
 
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Ok(org_key) = std::env::var(ENV_ORG_KEY) {
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(&org_key) {
+                headers.insert(HEADER_ORG_KEY, value);
+            }
+        }
+
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             client: Client::builder()
-                .user_agent("keyrunes-rust-sdk/0.1.0")
+                .user_agent(USER_AGENT)
+                .default_headers(headers)
                 .build()?,
             token: Arc::new(RwLock::new(None)),
         })
@@ -107,6 +124,7 @@ impl KeyrunesClient {
     ///
     /// * `username` - Username or email
     /// * `password` - User password
+    /// * `namespace` - Optional namespace (defaults to "public")
     ///
     /// # Returns
     ///
@@ -121,16 +139,24 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password").await?;
+    /// let token = client.login("user@example.com", "password", None).await?;
     /// println!("Token: {}", token.token);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn login<S: Into<String>>(&self, username: S, password: S) -> Result<Token> {
-        let url = format!("{}/api/login", self.base_url);
+    pub async fn login<S: Into<String>>(
+        &self,
+        username: S,
+        password: S,
+        namespace: Option<S>,
+    ) -> Result<Token> {
+        let url = format!("{}{}", self.base_url, ENDPOINT_LOGIN);
         let credentials = LoginCredentials {
             identity: username.into(),
             password: password.into(),
+            namespace: namespace
+                .map(|n| n.into())
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
 
         let response = self.client.post(&url).json(&credentials).send().await?;
@@ -148,6 +174,7 @@ impl KeyrunesClient {
     /// * `username` - Username
     /// * `email` - User email
     /// * `password` - User password (minimum 8 characters)
+    /// * `namespace` - Optional namespace (defaults to "public")
     ///
     /// # Returns
     ///
@@ -162,7 +189,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let user = client.register("john_doe", "john@example.com", "password123").await?;
+    /// let user = client.register("john_doe", "john@example.com", "password123", None).await?;
     /// println!("User registered: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
@@ -172,12 +199,16 @@ impl KeyrunesClient {
         username: S,
         email: S,
         password: S,
+        namespace: Option<S>,
     ) -> Result<User> {
-        let url = format!("{}/api/register", self.base_url);
+        let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
         let registration = UserRegistration {
             username: username.into(),
             email: email.into(),
             password: password.into(),
+            namespace: namespace
+                .map(|n| n.into())
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
 
         let response = self.client.post(&url).json(&registration).send().await?;
@@ -222,7 +253,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123").await?;
+    /// let token = client.login("user@example.com", "password123", None).await?;
     /// let user = client.get_current_user().await?;
     /// println!("Current user: {} ({})", user.username, user.email);
     /// # Ok(())
@@ -232,7 +263,7 @@ impl KeyrunesClient {
         let token = self.token.read().await;
         let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
 
-        let url = format!("{}/api/me", self.base_url);
+        let url = format!("{}{}", self.base_url, ENDPOINT_ME);
         let response = self
             .client
             .get(&url)
@@ -254,6 +285,7 @@ impl KeyrunesClient {
     /// * `email` - Administrator email
     /// * `password` - Administrator password (minimum 8 characters)
     /// * `admin_key` - Administrator registration key
+    /// * `namespace` - Optional namespace (defaults to "public")
     ///
     /// # Returns
     ///
@@ -268,7 +300,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let admin = client.register_admin("admin_user", "admin@example.com", "password123", "admin-key-123").await?;
+    /// let admin = client.register_admin("admin_user", "admin@example.com", "password123", "admin-key-123", None).await?;
     /// println!("Admin registered: {} ({})", admin.username, admin.email);
     /// # Ok(())
     /// # }
@@ -279,13 +311,17 @@ impl KeyrunesClient {
         email: S,
         password: S,
         admin_key: S,
+        namespace: Option<S>,
     ) -> Result<User> {
-        let url = format!("{}/api/register", self.base_url);
+        let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
         let registration = AdminRegistration {
             username: username.into(),
             email: email.into(),
             password: password.into(),
             admin_key: admin_key.into(),
+            namespace: namespace
+                .map(|n| n.into())
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
 
         let response = self.client.post(&url).json(&registration).send().await?;
@@ -314,7 +350,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123").await?;
+    /// let token = client.login("user@example.com", "password123", None).await?;
     /// let user = client.get_user("123").await?;
     /// println!("User: {} ({})", user.username, user.email);
     /// # Ok(())
@@ -360,7 +396,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123").await?;
+    /// let token = client.login("user@example.com", "password123", None).await?;
     /// let has_access = client.has_group("123", "admins").await?;
     /// if has_access {
     ///     println!("User has admin access");
@@ -412,7 +448,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123").await?;
+    /// let token = client.login("user@example.com", "password123", None).await?;
     /// let groups = client.get_user_groups(None::<&str>).await?;
     /// println!("User groups: {:?}", groups);
     /// # Ok(())
@@ -438,7 +474,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123").await?;
+    /// let token = client.login("user@example.com", "password123", None).await?;
     /// client.clear_token().await;
     /// # Ok(())
     /// # }

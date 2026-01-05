@@ -60,6 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Organization Key
+
+If you need to access specific organization data in a multi-tenant environment, you can set the `KEYRUNES_ORG_KEY` environment variable. The client will automatically inject the `X-Organization-Key` header into requests.
+
+```bash
+export KEYRUNES_ORG_KEY=your-org-uuid
+```
+
 ## Web Framework Integration
 
 ### Axum

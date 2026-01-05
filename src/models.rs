@@ -12,6 +12,7 @@
 //! let creds = LoginCredentials {
 //!     identity: "user@example.com".to_string(),
 //!     password: "password123".to_string(),
+//!     namespace: "public".to_string(),
 //! };
 //!
 //! let json = serde_json::to_string(&creds).unwrap();
@@ -203,6 +204,9 @@ pub struct UserRegistration {
     pub email: String,
     /// User password (minimum 8 characters)
     pub password: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
 }
 
 /// Administrator registration data
@@ -218,6 +222,9 @@ pub struct AdminRegistration {
     pub password: String,
     /// Administrator key
     pub admin_key: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
 }
 
 /// Login credentials
@@ -229,6 +236,16 @@ pub struct LoginCredentials {
     pub identity: String,
     /// User password
     pub password: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Default namespace value ("public")
+pub const DEFAULT_NAMESPACE: &str = "public";
+
+fn default_namespace() -> String {
+    DEFAULT_NAMESPACE.to_string()
 }
 
 /// Group verification result

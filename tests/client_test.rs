@@ -27,7 +27,7 @@ async fn test_login_success() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password").await;
+    let result = client.login("user@example.com", "password", None).await;
 
     // #assert
     assert!(result.is_ok());
@@ -51,7 +51,7 @@ async fn test_login_failure() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "wrong").await;
+    let result = client.login("user@example.com", "wrong", None).await;
 
     // #assert
     assert!(result.is_err());
@@ -78,7 +78,7 @@ async fn test_register_success() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123")
+        .register("john", "john@example.com", "password123", None)
         .await;
 
     // #assert
@@ -106,7 +106,7 @@ async fn test_register_failure() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123")
+        .register("john", "john@example.com", "password123", None)
         .await;
 
     // #assert
@@ -139,11 +139,11 @@ async fn test_register_and_login_flow() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let user = client
-        .register("john", "john@example.com", "password123")
+        .register("john", "john@example.com", "password123", None)
         .await
         .unwrap();
     let token = client
-        .login("john@example.com", "password123")
+        .login("john@example.com", "password123", None)
         .await
         .unwrap();
 
@@ -269,7 +269,13 @@ async fn test_register_admin_success() {
 
     // #act
     let result = client
-        .register_admin("admin", "admin@example.com", "password123", "admin-key")
+        .register_admin(
+            "admin",
+            "admin@example.com",
+            "password123",
+            "admin-key",
+            None,
+        )
         .await;
 
     // #assert

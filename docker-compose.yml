@@ -42,7 +42,7 @@ services:
 
   keyrunes:
 
-    image: jonatasoli/keyrunes:latest
+    image: jonatasoli/keyrunes:v0.2.0
 
     container_name: keyrunes-server
 
