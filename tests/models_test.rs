@@ -145,3 +145,37 @@ fn test_group_check() {
     // #assert
     assert!(json.contains("true"));
 }
+
+#[test]
+fn test_forgot_password_request() {
+    let request = ForgotPasswordRequest {
+        email: "user@example.com".to_string(),
+        namespace: DEFAULT_NAMESPACE.to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.contains("email"));
+    assert!(json.contains("namespace"));
+}
+
+#[test]
+fn test_reset_password_request() {
+    let request = ResetPasswordRequest {
+        token: "reset-token-123".to_string(),
+        new_password: "newPassword456".to_string(),
+        namespace: DEFAULT_NAMESPACE.to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.contains("token"));
+    assert!(json.contains("new_password"));
+}
+
+#[test]
+fn test_change_password_request() {
+    let request = ChangePasswordRequest {
+        current_password: "oldPass123".to_string(),
+        new_password: "newPass456".to_string(),
+    };
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.contains("current_password"));
+    assert!(json.contains("new_password"));
+}

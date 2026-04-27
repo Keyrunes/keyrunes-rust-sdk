@@ -466,3 +466,231 @@ async fn test_clear_token() {
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), KeyrunesError::InvalidToken));
 }
+
+#[tokio::test]
+async fn test_forgot_password_success() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/forgot-password")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"If the email is registered, you will receive a reset link.","reset_url":"?forgot_password=abc123"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.forgot_password("user@example.com", None).await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.message.contains("reset link"));
+    assert!(response.reset_url.contains("abc123"));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_forgot_password_failure() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/forgot-password")
+        .with_status(400)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Invalid request"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.forgot_password("bad@example.com", None).await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::HttpError(_)));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_reset_password_success() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/reset-password")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Password reset successfully"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.reset_password("reset-token-abc", "newPassword123", None).await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.message.contains("reset successfully"));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_reset_password_failure() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/reset-password")
+        .with_status(400)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Invalid or expired token"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.reset_password("expired-token", "newPassword123", None).await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::HttpError(_)));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_change_password_success() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/user/change-password")
+        .match_header("authorization", "Bearer test-token-123")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Password changed successfully"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token-123").await;
+    let result = client.change_password("oldPass123", "newPass456").await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.message.contains("changed"));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_change_password_failure() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/user/change-password")
+        .match_header("authorization", "Bearer test-token-123")
+        .with_status(400)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Invalid current password"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token-123").await;
+    let result = client.change_password("wrongPass", "newPass456").await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::HttpError(_)));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_change_password_no_token() {
+    let client = KeyrunesClient::new("https://example.com").unwrap();
+
+    let result = client.change_password("oldPass123", "newPass456").await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::InvalidToken));
+}
+
+#[tokio::test]
+async fn test_admin_reset_user_password_success() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/admin/users/42/reset-password")
+        .match_header("authorization", "Bearer admin-token-789")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"temporary_password":"tempAbc123XYZ!"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("admin-token-789").await;
+    let result = client.admin_reset_user_password("42").await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert_eq!(response.temporary_password, "tempAbc123XYZ!");
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_admin_reset_user_password_forbidden() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/admin/users/42/reset-password")
+        .match_header("authorization", "Bearer user-token-789")
+        .with_status(403)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Admin access required"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("user-token-789").await;
+    let result = client.admin_reset_user_password("42").await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::AuthorizationError(_)));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_admin_send_password_reset_success() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/admin/users/42/send-reset")
+        .match_header("authorization", "Bearer admin-token-789")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Reset email sent"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("admin-token-789").await;
+    let result = client.admin_send_password_reset("42").await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.message.contains("Reset email sent"));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_admin_send_password_reset_forbidden() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/admin/users/42/send-reset")
+        .match_header("authorization", "Bearer user-token-789")
+        .with_status(403)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Admin access required"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("user-token-789").await;
+    let result = client.admin_send_password_reset("42").await;
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::AuthorizationError(_)));
+
+    mock.assert_async().await;
+}
