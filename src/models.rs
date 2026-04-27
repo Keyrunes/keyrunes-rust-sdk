@@ -270,3 +270,69 @@ pub struct GroupVerificationResponse {
     /// Indicates whether the user belongs to the group
     pub has_group: bool,
 }
+
+/// Forgot password request
+///
+/// Used to request a password reset email.
+#[derive(Debug, Clone, Serialize)]
+pub struct ForgotPasswordRequest {
+    /// User email address
+    pub email: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Forgot password response
+///
+/// Response from the forgot-password endpoint.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ForgotPasswordResponse {
+    /// Status message
+    pub message: String,
+    /// Password reset URL with token
+    pub reset_url: String,
+}
+
+/// Reset password request
+///
+/// Used to reset a password using a token received via email.
+#[derive(Debug, Clone, Serialize)]
+pub struct ResetPasswordRequest {
+    /// Password reset token
+    pub token: String,
+    /// New password
+    pub new_password: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Change password request
+///
+/// Used to change the password of the currently authenticated user.
+#[derive(Debug, Clone, Serialize)]
+pub struct ChangePasswordRequest {
+    /// Current password
+    pub current_password: String,
+    /// New password
+    pub new_password: String,
+}
+
+/// Generic message response
+///
+/// Used by multiple endpoints that return only a message.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageResponse {
+    /// Status message
+    pub message: String,
+}
+
+/// Admin password reset response
+///
+/// Response from the admin reset-password endpoint containing a temporary password.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PasswordResetResponse {
+    /// Generated temporary password
+    pub temporary_password: String,
+}
