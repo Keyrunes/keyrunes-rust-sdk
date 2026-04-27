@@ -16,7 +16,7 @@ fn generate_random_user() -> (String, String) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     let base_url =
         std::env::var("KEYRUNES_BASE_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());

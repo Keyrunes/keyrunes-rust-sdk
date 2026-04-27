@@ -502,7 +502,7 @@ impl KeyrunesClient {
         &self,
         status: reqwest::StatusCode,
         body: &str,
-        url: &reqwest::Url,
+        url: &url::Url,
     ) -> KeyrunesError {
         let error_message = if body.trim_start().starts_with('<') {
             format!("HTTP {} - Received HTML response (endpoint may not exist or path is incorrect). Tried: {}", status.as_u16(), url)

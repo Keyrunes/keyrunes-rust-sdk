@@ -2,7 +2,7 @@
 
 use crate::{KeyrunesClient, KeyrunesError, User};
 use axum::{
-    async_trait,
+
     extract::{FromRequestParts, Query},
     http::request::Parts,
     http::StatusCode,
@@ -32,7 +32,6 @@ pub struct AuthenticatedUser {
     pub user: User,
 }
 
-#[async_trait]
 impl FromRequestParts<KeyrunesState> for AuthenticatedUser {
     type Rejection = KeyrunesRejection;
 
@@ -70,7 +69,6 @@ pub struct RequireGroup {
     pub group_id: String,
 }
 
-#[async_trait]
 impl FromRequestParts<KeyrunesState> for RequireGroup {
     type Rejection = KeyrunesRejection;
 
@@ -117,7 +115,6 @@ pub struct RequireAdmin {
     pub user: User,
 }
 
-#[async_trait]
 impl FromRequestParts<KeyrunesState> for RequireAdmin {
     type Rejection = KeyrunesRejection;
 
