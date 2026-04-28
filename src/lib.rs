@@ -25,7 +25,12 @@ pub mod client;
 pub mod error;
 pub mod models;
 
-#[cfg(any(feature = "axum", feature = "actix", feature = "rocket", feature = "loco"))]
+#[cfg(any(
+    feature = "axum",
+    feature = "actix",
+    feature = "rocket",
+    feature = "loco"
+))]
 pub mod middleware;
 
 pub use client::KeyrunesClient;
