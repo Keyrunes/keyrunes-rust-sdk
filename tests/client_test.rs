@@ -521,7 +521,9 @@ async fn test_reset_password_success() {
         .await;
 
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.reset_password("reset-token-abc", "newPassword123", None).await;
+    let result = client
+        .reset_password("reset-token-abc", "newPassword123", None)
+        .await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -542,7 +544,9 @@ async fn test_reset_password_failure() {
         .await;
 
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.reset_password("expired-token", "newPassword123", None).await;
+    let result = client
+        .reset_password("expired-token", "newPassword123", None)
+        .await;
 
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), KeyrunesError::HttpError(_)));
@@ -645,7 +649,10 @@ async fn test_admin_reset_user_password_forbidden() {
     let result = client.admin_reset_user_password("42").await;
 
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), KeyrunesError::AuthorizationError(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        KeyrunesError::AuthorizationError(_)
+    ));
 
     mock.assert_async().await;
 }
@@ -690,7 +697,10 @@ async fn test_admin_send_password_reset_forbidden() {
     let result = client.admin_send_password_reset("42").await;
 
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), KeyrunesError::AuthorizationError(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        KeyrunesError::AuthorizationError(_)
+    ));
 
     mock.assert_async().await;
 }
@@ -715,7 +725,11 @@ async fn test_handle_error_html_response() {
     assert!(result.is_err());
     match result.unwrap_err() {
         KeyrunesError::HttpError(msg) => {
-            assert!(msg.contains("HTML response"), "Expected HTML response error, got: {}", msg);
+            assert!(
+                msg.contains("HTML response"),
+                "Expected HTML response error, got: {}",
+                msg
+            );
         }
         _ => panic!("Expected HttpError for HTML response"),
     }
@@ -744,16 +758,22 @@ async fn test_handle_error_long_body_truncation() {
     assert!(result.is_err());
     match result.unwrap_err() {
         KeyrunesError::HttpError(msg) => {
-            assert!(msg.contains("..."), "Expected truncated body with ..., got: {}", msg);
-            assert!(msg.len() < 350, "Message should be truncated, got length: {}", msg.len());
+            assert!(
+                msg.contains("..."),
+                "Expected truncated body with ..., got: {}",
+                msg
+            );
+            assert!(
+                msg.len() < 350,
+                "Message should be truncated, got length: {}",
+                msg.len()
+            );
         }
         _ => panic!("Expected HttpError for long body"),
     }
 
     mock.assert_async().await;
 }
-
-
 
 #[tokio::test]
 async fn test_handle_error_not_found_other() {
@@ -776,7 +796,11 @@ async fn test_handle_error_not_found_other() {
     let err = result.unwrap_err();
     match err {
         KeyrunesError::Other(msg) => {
-            assert!(msg.contains("Resource not found"), "Expected Other error with 'Resource not found', got: {}", msg);
+            assert!(
+                msg.contains("Resource not found"),
+                "Expected Other error with 'Resource not found', got: {}",
+                msg
+            );
         }
         _ => panic!("Expected Other error for generic not found, got: {:?}", err),
     }
@@ -854,7 +878,9 @@ async fn test_register_response_parsing() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.register("parseduser", "parsed@example.com", "password123", None).await;
+    let result = client
+        .register("parseduser", "parsed@example.com", "password123", None)
+        .await;
 
     // #assert
     assert!(result.is_ok());
@@ -883,7 +909,15 @@ async fn test_register_admin_response_parsing() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.register_admin("adminparsed", "adminparsed@example.com", "password123", "admin-key", None).await;
+    let result = client
+        .register_admin(
+            "adminparsed",
+            "adminparsed@example.com",
+            "password123",
+            "admin-key",
+            None,
+        )
+        .await;
 
     // #assert
     assert!(result.is_ok());

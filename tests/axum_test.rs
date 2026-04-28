@@ -3,15 +3,15 @@ mod axum_tests {
     use axum::{
         body::Body,
         extract::Request,
-        http::{Method, StatusCode, header::AUTHORIZATION},
+        http::{header::AUTHORIZATION, Method, StatusCode},
         response::IntoResponse,
         routing::get,
         Router,
     };
-use keyrunes_rust_sdk::{
-    middleware::axum::{KeyrunesRejection, KeyrunesState, RequireAdmin, RequireGroup},
-    KeyrunesClient,
-};
+    use keyrunes_rust_sdk::{
+        middleware::axum::{KeyrunesRejection, KeyrunesState, RequireAdmin, RequireGroup},
+        KeyrunesClient,
+    };
 
     use mockito::Server;
     use tower::util::ServiceExt;
@@ -71,7 +71,9 @@ use keyrunes_rust_sdk::{
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
         assert!(body_str.contains("testuser"));
     }
@@ -183,7 +185,10 @@ use keyrunes_rust_sdk::{
 
         let response = router.oneshot(request).await.unwrap();
         // Should return BAD_REQUEST for missing group_id
-        assert!(response.status() == StatusCode::BAD_REQUEST || response.status() == StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(
+            response.status() == StatusCode::BAD_REQUEST
+                || response.status() == StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[tokio::test]

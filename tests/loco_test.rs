@@ -1,10 +1,7 @@
 use http::{HeaderMap, HeaderValue};
 use keyrunes_rust_sdk::{
     middleware::loco::{
-        extract_token_from_headers,
-        get_user_from_token,
-        require_group,
-        require_admin,
+        extract_token_from_headers, get_user_from_token, require_admin, require_group,
         AuthenticatedUser,
     },
     KeyrunesClient,
@@ -29,10 +26,7 @@ fn create_mock_user(username: &str, groups: Vec<&str>) -> AuthenticatedUser {
 #[test]
 fn test_extract_token_from_headers_valid() {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        "authorization",
-        HeaderValue::from_static("Bearer token123"),
-    );
+    headers.insert("authorization", HeaderValue::from_static("Bearer token123"));
 
     let token = extract_token_from_headers(&headers).unwrap();
     assert_eq!(token, "token123");
@@ -48,10 +42,7 @@ fn test_extract_token_from_headers_missing() {
 #[test]
 fn test_extract_token_from_headers_wrong_format() {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        "authorization",
-        HeaderValue::from_static("Basic abc123"),
-    );
+    headers.insert("authorization", HeaderValue::from_static("Basic abc123"));
 
     let token = extract_token_from_headers(&headers);
     assert!(token.is_none());
@@ -132,7 +123,8 @@ async fn test_require_group_not_in_group() {
     let mut server = Server::new_async().await;
     let server_url = server.url();
 
-    let mock_user_body = r#"{"user_id":123,"username":"testuser","email":"test@example.com","groups":["users"]}"#;
+    let mock_user_body =
+        r#"{"user_id":123,"username":"testuser","email":"test@example.com","groups":["users"]}"#;
     let _mock_me = server
         .mock("GET", "/api/me")
         .match_header("authorization", "Bearer test-token")
@@ -194,7 +186,8 @@ async fn test_require_admin_not_admin() {
     let mut server = Server::new_async().await;
     let server_url = server.url();
 
-    let mock_user_body = r#"{"user_id":123,"username":"regularuser","email":"user@example.com","groups":["users"]}"#;
+    let mock_user_body =
+        r#"{"user_id":123,"username":"regularuser","email":"user@example.com","groups":["users"]}"#;
     let _mock_me = server
         .mock("GET", "/api/me")
         .match_header("authorization", "Bearer user-token")

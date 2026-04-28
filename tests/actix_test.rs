@@ -1,7 +1,7 @@
 #[cfg(feature = "actix")]
 mod actix_tests {
-    use actix_web::{test, App, web::Data};
-    use actix_web::test::{TestRequest, call_service};
+    use actix_web::test::{call_service, TestRequest};
+    use actix_web::{test, web::Data, App};
     use keyrunes_rust_sdk::{
         middleware::actix::{AuthenticatedUser, KeyrunesAuthMiddleware},
         KeyrunesClient,
@@ -34,10 +34,14 @@ mod actix_tests {
             App::new()
                 .app_data(Data::new(state))
                 .wrap(KeyrunesAuthMiddleware)
-                .route("/test", actix_web::web::get().to(|user: AuthenticatedUser| {
-                    async move { actix_web::HttpResponse::Ok().body(user.user.username.clone()) }
-                }))
-        ).await;
+                .route(
+                    "/test",
+                    actix_web::web::get().to(|user: AuthenticatedUser| async move {
+                        actix_web::HttpResponse::Ok().body(user.user.username.clone())
+                    }),
+                ),
+        )
+        .await;
 
         let req = TestRequest::get()
             .uri("/test")
@@ -57,10 +61,14 @@ mod actix_tests {
             App::new()
                 .app_data(Data::new(state))
                 .wrap(KeyrunesAuthMiddleware)
-                .route("/test", actix_web::web::get().to(|_: AuthenticatedUser| {
-                    async move { actix_web::HttpResponse::Ok().body("ok") }
-                }))
-        ).await;
+                .route(
+                    "/test",
+                    actix_web::web::get().to(|_: AuthenticatedUser| async move {
+                        actix_web::HttpResponse::Ok().body("ok")
+                    }),
+                ),
+        )
+        .await;
 
         let req = TestRequest::get().uri("/test").to_request();
         let resp = call_service(&app, req).await;
@@ -76,10 +84,14 @@ mod actix_tests {
             App::new()
                 .app_data(Data::new(state))
                 .wrap(KeyrunesAuthMiddleware)
-                .route("/test", actix_web::web::get().to(|_: AuthenticatedUser| {
-                    async move { actix_web::HttpResponse::Ok().body("ok") }
-                }))
-        ).await;
+                .route(
+                    "/test",
+                    actix_web::web::get().to(|_: AuthenticatedUser| async move {
+                        actix_web::HttpResponse::Ok().body("ok")
+                    }),
+                ),
+        )
+        .await;
 
         let req = TestRequest::get()
             .uri("/test")

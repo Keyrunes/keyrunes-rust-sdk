@@ -86,7 +86,8 @@ fn test_from_url_parse_error_invalid_port() {
 #[test]
 fn test_from_serde_json_error() {
     // #setup
-    let json_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str("invalid json");
+    let json_result: Result<serde_json::Value, serde_json::Error> =
+        serde_json::from_str("invalid json");
     let parse_err = json_result.unwrap_err();
     let err: KeyrunesError = parse_err.into();
 
@@ -106,10 +107,7 @@ async fn test_from_reqwest_error_timeout() {
         .unwrap();
 
     // Use TEST-NET-1 address (192.0.2.0/24) which is reserved for documentation and won't respond
-    let result = client
-        .get("http://192.0.2.1:9999")
-        .send()
-        .await;
+    let result = client.get("http://192.0.2.1:9999").send().await;
 
     // #act
     let err: KeyrunesError = result.unwrap_err().into();
@@ -117,7 +115,10 @@ async fn test_from_reqwest_error_timeout() {
     // #assert
     match err {
         KeyrunesError::NetworkError(_) => {}
-        _ => panic!("Expected NetworkError for timeout/connect error, got {:?}", err),
+        _ => panic!(
+            "Expected NetworkError for timeout/connect error, got {:?}",
+            err
+        ),
     }
 }
 
@@ -148,6 +149,9 @@ async fn test_from_reqwest_error_http() {
     // #assert
     match err {
         KeyrunesError::HttpError(_) => {}
-        _ => panic!("Expected HttpError for non-timeout/connect error, got {:?}", err),
+        _ => panic!(
+            "Expected HttpError for non-timeout/connect error, got {:?}",
+            err
+        ),
     }
 }

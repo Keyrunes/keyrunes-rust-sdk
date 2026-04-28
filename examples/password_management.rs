@@ -77,7 +77,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. reset_password - Reset with token (would normally come from email)
     println!("\n3. Testing reset_password (with dummy token)...");
-    match client.reset_password("dummy-token", "anotherNewPassword", None).await {
+    match client
+        .reset_password("dummy-token", "anotherNewPassword", None)
+        .await
+    {
         Ok(response) => println!("   Success: {}", response.message),
         Err(e) => println!("   x Expected error (invalid token): {}", e),
     }

@@ -2,7 +2,6 @@
 
 use crate::{KeyrunesClient, KeyrunesError, User};
 use axum::{
-
     extract::{FromRequestParts, Query},
     http::request::Parts,
     http::StatusCode,

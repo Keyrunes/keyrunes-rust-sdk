@@ -270,7 +270,7 @@ impl KeyrunesClient {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let token = client.login("user@example.com", "password123", None).await?;
     /// let user = client.get_current_user().await?;
-/// println!("Current user: {} ({})", user.username, user.email);
+    /// println!("Current user: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
     /// ```
@@ -367,7 +367,7 @@ impl KeyrunesClient {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let token = client.login("user@example.com", "password123", None).await?;
     /// let user = client.get_user("123").await?;
-/// println!("User: {} ({})", user.username, user.email);
+    /// println!("User: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
     /// ```
@@ -413,7 +413,7 @@ impl KeyrunesClient {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let token = client.login("user@example.com", "password123", None).await?;
     /// let has_access = client.has_group("123", "admins").await?;
-/// if has_access {
+    /// if has_access {
     /// #     println!("User has admin access");
     /// # }
     /// # Ok(())
@@ -465,7 +465,7 @@ impl KeyrunesClient {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let token = client.login("user@example.com", "password123", None).await?;
     /// let groups = client.get_user_groups(None::<&str>).await?;
-/// println!("User groups: {:?}", groups);
+    /// println!("User groups: {:?}", groups);
     /// # Ok(())
     /// # }
     /// ```
@@ -490,7 +490,7 @@ impl KeyrunesClient {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let token = client.login("user@example.com", "password123", None).await?;
-/// client.clear_token().await;
+    /// client.clear_token().await;
     /// # Ok(())
     /// # }
     /// ```
@@ -537,7 +537,8 @@ impl KeyrunesClient {
                 .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
         let response = self.client.post(&url).json(&request).send().await?;
-        self.handle_response::<ForgotPasswordResponse>(response).await
+        self.handle_response::<ForgotPasswordResponse>(response)
+            .await
     }
 
     /// Resets a password using a token received via email.
@@ -676,7 +677,8 @@ impl KeyrunesClient {
             .header("Authorization", format!("Bearer {}", token_value))
             .send()
             .await?;
-        self.handle_response::<PasswordResetResponse>(response).await
+        self.handle_response::<PasswordResetResponse>(response)
+            .await
     }
 
     /// Admin-only: Sends a password reset email to a user.
@@ -712,10 +714,7 @@ impl KeyrunesClient {
         let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
 
         let user_id = user_id.into();
-        let url = format!(
-            "{}/api/admin/users/{}/send-reset",
-            self.base_url, user_id
-        );
+        let url = format!("{}/api/admin/users/{}/send-reset", self.base_url, user_id);
         let response = self
             .client
             .post(&url)
