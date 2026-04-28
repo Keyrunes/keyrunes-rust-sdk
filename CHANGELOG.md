@@ -2,7 +2,7 @@
 
 The main changelog for the keyrunes rust sdk.
 
-## [0.1.1] - 2026-04-28
+## [unreleased]
 
 ### Features
 
@@ -28,6 +28,9 @@ The main changelog for the keyrunes rust sdk.
 - Update axum 0.7 → 0.8 (remove async_trait, use native axum 0.8 API)
 
 All tests pass, all features compile, clippy clean.
+- Chore: Up[date CHANGELOG
+-  Add updates in changelog
+- Remove convencional commits for true in this moment
 
 ### Testing
 
