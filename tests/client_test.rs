@@ -694,3 +694,265 @@ async fn test_admin_send_password_reset_forbidden() {
 
     mock.assert_async().await;
 }
+
+#[tokio::test]
+async fn test_handle_error_html_response() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/login")
+        .with_status(500)
+        .with_header("content-type", "text/html")
+        .with_body("<html>Error</html>")
+        .create_async()
+        .await;
+
+    // #act
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.login("user@example.com", "password", None).await;
+
+    // #assert
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        KeyrunesError::HttpError(msg) => {
+            assert!(msg.contains("HTML response"), "Expected HTML response error, got: {}", msg);
+        }
+        _ => panic!("Expected HttpError for HTML response"),
+    }
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_handle_error_long_body_truncation() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let long_body = "x".repeat(300);
+    let mock = server
+        .mock("POST", "/api/login")
+        .with_status(500)
+        .with_header("content-type", "application/json")
+        .with_body(&long_body)
+        .create_async()
+        .await;
+
+    // #act
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.login("user@example.com", "password", None).await;
+
+    // #assert
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        KeyrunesError::HttpError(msg) => {
+            assert!(msg.contains("..."), "Expected truncated body with ..., got: {}", msg);
+            assert!(msg.len() < 350, "Message should be truncated, got length: {}", msg.len());
+        }
+        _ => panic!("Expected HttpError for long body"),
+    }
+
+    mock.assert_async().await;
+}
+
+
+
+#[tokio::test]
+async fn test_handle_error_not_found_other() {
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/forgot-password")
+        .with_status(404)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Resource missing"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+
+    // #act
+    let result = client.forgot_password("test@example.com", None).await;
+
+    // #assert
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    match err {
+        KeyrunesError::Other(msg) => {
+            assert!(msg.contains("Resource not found"), "Expected Other error with 'Resource not found', got: {}", msg);
+        }
+        _ => panic!("Expected Other error for generic not found, got: {:?}", err),
+    }
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_client_new_with_org_key_env_var() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer test-token")
+        .match_header("x-organization-key", "test-org-key-123")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"user_id":1,"username":"test","email":"test@example.com","groups":[]}"#)
+        .create_async()
+        .await;
+
+    // #act - set env var before creating client
+    std::env::set_var("KEYRUNES_ORG_KEY", "test-org-key-123");
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token").await;
+    let result = client.get_current_user().await;
+
+    // #assert
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().username, "test");
+
+    mock.assert_async().await;
+
+    // Cleanup
+    std::env::remove_var("KEYRUNES_ORG_KEY");
+}
+
+#[tokio::test]
+async fn test_admin_reset_user_password_no_token() {
+    // #setup
+    let client = KeyrunesClient::new("https://example.com").unwrap();
+
+    // #act
+    let result = client.admin_reset_user_password("42").await;
+
+    // #assert
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::InvalidToken));
+}
+
+#[tokio::test]
+async fn test_admin_send_password_reset_no_token() {
+    // #setup
+    let client = KeyrunesClient::new("https://example.com").unwrap();
+
+    // #act
+    let result = client.admin_send_password_reset("42").await;
+
+    // #assert
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), KeyrunesError::InvalidToken));
+}
+
+#[tokio::test]
+async fn test_register_response_parsing() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/register")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"user":{"user_id":456,"username":"parseduser","email":"parsed@example.com","groups":["users","testers"]},"token":"parsed-token","requires_password_change":true}"#)
+        .create_async()
+        .await;
+
+    // #act
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.register("parseduser", "parsed@example.com", "password123", None).await;
+
+    // #assert
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.id, "456");
+    assert_eq!(user.username, "parseduser");
+    assert_eq!(user.email, "parsed@example.com");
+    assert_eq!(user.groups.len(), 2);
+    assert!(user.groups.contains(&"users".to_string()));
+    assert!(user.groups.contains(&"testers".to_string()));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_register_admin_response_parsing() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/api/register")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"user":{"user_id":789,"username":"adminparsed","email":"adminparsed@example.com","groups":["admins","superusers"]},"token":"admin-token-parsed","requires_password_change":false}"#)
+        .create_async()
+        .await;
+
+    // #act
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    let result = client.register_admin("adminparsed", "adminparsed@example.com", "password123", "admin-key", None).await;
+
+    // #assert
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.id, "789");
+    assert_eq!(user.username, "adminparsed");
+    assert_eq!(user.email, "adminparsed@example.com");
+    assert_eq!(user.groups.len(), 2);
+    assert!(user.groups.contains(&"admins".to_string()));
+    assert!(user.groups.contains(&"superusers".to_string()));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_user_full_response_parsing() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/users/555")
+        .match_header("authorization", "Bearer test-token-full")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"user_id":555,"username":"fulluser","email":"full@example.com","groups":["group1","group2","group3"]}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token-full").await;
+
+    // #act
+    let result = client.get_user("555").await;
+
+    // #assert
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.id, "555");
+    assert_eq!(user.username, "fulluser");
+    assert_eq!(user.email, "full@example.com");
+    assert_eq!(user.groups.len(), 3);
+    assert!(user.groups.contains(&"group1".to_string()));
+    assert!(user.groups.contains(&"group2".to_string()));
+    assert!(user.groups.contains(&"group3".to_string()));
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_has_group_has_access_alias() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/users/123/groups/test-group")
+        .match_header("authorization", "Bearer test-token-alias")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"has_access":true}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    client.set_token("test-token-alias").await;
+
+    // #act
+    let result = client.has_group("123", "test-group").await;
+
+    // #assert
+    assert!(result.is_ok());
+    assert!(result.unwrap());
+
+    mock.assert_async().await;
+}

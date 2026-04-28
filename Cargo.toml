@@ -59,10 +59,15 @@ required-features = ["rocket"]
 name = "loco_example"
 path = "examples/loco_example.rs"
 
+[[example]]
+name = "password_management"
+path = "examples/password_management.rs"
+
 [dev-dependencies]
 tokio-test = "0.4"
 mockito = "1.2"
 dotenvy = "0.15"
+tower = "0.5"
 
 [features]
 default = []

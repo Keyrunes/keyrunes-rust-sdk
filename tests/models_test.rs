@@ -179,3 +179,97 @@ fn test_change_password_request() {
     assert!(json.contains("current_password"));
     assert!(json.contains("new_password"));
 }
+
+#[test]
+fn test_token_response_legacy_format_deserialization() {
+    // Test legacy format with access_token field
+    let json = r#"{"access_token":"legacy-token-xyz","token_type":"bearer"}"#;
+
+    let token: Token = serde_json::from_str(json).unwrap();
+
+    assert_eq!(token.token, "legacy-token-xyz");
+    assert_eq!(token.token_type, Some("bearer".to_string()));
+    assert_eq!(token.expires_at, None);
+}
+
+#[test]
+fn test_token_new_format_deserialization_with_all_fields() {
+    // Test new format with all fields
+    let json = r#"{"token":"new-token-abc","token_type":"bearer","expires_in":3600,"refresh_token":"refresh-xyz"}"#;
+
+    let token: Token = serde_json::from_str(json).unwrap();
+
+    assert_eq!(token.token, "new-token-abc");
+    assert_eq!(token.token_type, Some("bearer".to_string()));
+    assert_eq!(token.expires_in, Some(3600));
+    assert_eq!(token.refresh_token, Some("refresh-xyz".to_string()));
+}
+
+#[test]
+fn test_user_response_with_numeric_user_id_only() {
+    // Test UserResponse with only user_id (numeric) and no id/external_id
+    let json = r#"{"user_id":42,"username":"john","email":"john@test.com","groups":[]}"#;
+
+    let user: User = serde_json::from_str(json).unwrap();
+
+    assert_eq!(user.id, "42");
+    assert_eq!(user.username, "john");
+    assert_eq!(user.email, "john@test.com");
+}
+
+#[test]
+fn test_user_response_with_external_id() {
+    // Test UserResponse with external_id field
+    let json = r#"{"external_id":"ext-123","username":"john","email":"john@test.com","groups":[]}"#;
+
+    let user: User = serde_json::from_str(json).unwrap();
+
+    assert_eq!(user.id, "ext-123");
+    assert_eq!(user.username, "john");
+    assert_eq!(user.email, "john@test.com");
+}
+
+#[test]
+fn test_user_response_no_id_fallback_to_unknown() {
+    // Test UserResponse with no ID at all - should fallback to "unknown"
+    let json = r#"{"username":"john","email":"john@test.com","groups":[]}"#;
+
+    let user: User = serde_json::from_str(json).unwrap();
+
+    assert_eq!(user.id, "unknown");
+    assert_eq!(user.username, "john");
+    assert_eq!(user.email, "john@test.com");
+}
+
+#[test]
+fn test_group_verification_response_deserialization() {
+    // Test GroupVerificationResponse deserialization
+    let json = r#"{"user_id":"user-123","group_id":"group-456","has_group":true}"#;
+
+    let response: GroupVerificationResponse = serde_json::from_str(json).unwrap();
+
+    assert_eq!(response.user_id, "user-123");
+    assert_eq!(response.group_id, "group-456");
+    assert!(response.has_group);
+}
+
+#[test]
+fn test_register_response_deserialization() {
+    // Test RegisterResponse deserialization
+    let json = r#"{"user":{"id":"new-user","username":"john","email":"john@test.com","groups":[]},"token":"reg-token-123","requires_password_change":false}"#;
+
+    let response: RegisterResponse = serde_json::from_str(json).unwrap();
+
+    assert_eq!(response.token, Some("reg-token-123".to_string()));
+    assert_eq!(response.requires_password_change, Some(false));
+}
+
+#[test]
+fn test_group_check_has_access_alias() {
+    // Test GroupCheck with has_access alias instead of has_group
+    let json = r#"{"has_access":true}"#;
+
+    let check: GroupCheck = serde_json::from_str(json).unwrap();
+
+    assert!(check.has_group);
+}
