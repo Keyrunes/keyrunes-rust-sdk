@@ -2,7 +2,31 @@
 
 The main changelog for the keyrunes rust sdk.
 
-## [unreleased]
+## [0.1.1] - 2026-04-28
+
+### Bug Fixes
+
+- Fix(ci): resolve fmt failures and add daily scheduled CI run
+
+- Run cargo fmt to fix formatting violations in 8 files
+- Add schedule trigger for daily CI at midnight UTC (cron: '0 0 * * *')
+- All 120 tests pass, clippy clean
+- Fix(test): gate middleware module with loco feature
+
+Add feature='loco' to middleware module gate so that
+tests/loco_test.rs can import middleware::loco::* when
+running with --features loco (or loco alone).
+- Fix(ci): resolve fmt and loco_test compilation errors
+
+- Run cargo fmt to expand long cfg line in src/lib.rs
+- Add #![cfg(...)] gate to tests/loco_test.rs so it only
+  compiles when a framework feature (axum/actix/rocket) is enabled
+
+### Build System
+
+- Build: Update CHANGELOG
+- Add updates in changelog
+- fix build CI errors
 
 ### Features
 
