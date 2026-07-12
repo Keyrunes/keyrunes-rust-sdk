@@ -33,7 +33,7 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let auth_header = match request.headers().get_one("authorization") {
-            Some(header) => header,
+            Some(h) => h,
             None => {
                 return Outcome::Error((
                     rocket::http::Status::Unauthorized,
@@ -53,7 +53,7 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
         };
 
         let state = match request.guard::<&State<KeyrunesState>>().await {
-            Outcome::Success(s) => s,
+            rocket::request::Outcome::Success(s) => s,
             _ => {
                 return Outcome::Error((
                     rocket::http::Status::InternalServerError,

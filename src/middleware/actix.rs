@@ -7,7 +7,6 @@ use actix_web::{
 };
 use std::{
     future::{ready, Ready},
-    pin::Pin,
     rc::Rc,
     sync::Arc,
 };
@@ -81,7 +80,8 @@ where
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future =
+        std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
 
     forward_ready!(service);
 

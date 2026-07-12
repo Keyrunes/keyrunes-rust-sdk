@@ -9,4 +9,5 @@ pub mod actix;
 #[cfg(feature = "rocket")]
 pub mod rocket;
 
+#[cfg(feature = "loco")]
 pub mod loco;

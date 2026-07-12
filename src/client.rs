@@ -10,8 +10,8 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-//! let user = client.register("john", "john@example.com", "password123", None).await?;
-//! let token = client.login("john@example.com", "password123", None).await?;
+//! let user = client.register("john", "john@example.com", "password123").await?;
+//! let token = client.login("john@example.com", "password123").await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -21,21 +21,6 @@ use crate::models::*;
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-// Constants
-const USER_AGENT: &str = "keyrunes-rust-sdk/0.1.0";
-const HEADER_ORG_KEY: &str = "X-Organization-Key";
-const ENV_ORG_KEY: &str = "KEYRUNES_ORG_KEY";
-
-const ENDPOINT_LOGIN: &str = "/api/login";
-const ENDPOINT_REGISTER: &str = "/api/register";
-const ENDPOINT_ME: &str = "/api/me";
-
-// New constants start here
-const ENDPOINT_FORGOT_PASSWORD: &str = "/api/forgot-password";
-const ENDPOINT_RESET_PASSWORD: &str = "/api/reset-password";
-const ENDPOINT_CHANGE_PASSWORD: &str = "/api/user/change-password";
-// New constants end here
 
 /// Client for interacting with the Keyrunes API
 ///
@@ -59,20 +44,11 @@ const ENDPOINT_CHANGE_PASSWORD: &str = "/api/user/change-password";
 /// # use keyrunes_rust_sdk::KeyrunesClient;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-/// let user = client.register("john", "john@example.com", "password123", None).await?;
-/// let token = client.login("john@example.com", "password123", None).await?;
+/// let user = client.register("john", "john@example.com", "password123").await?;
+/// let token = client.login("john@example.com", "password123").await?;
 /// println!("Token: {}", token.token);
 /// # Ok(())
 /// # }
-/// ```
-///
-/// URLs with trailing slashes are normalized:
-///
-/// ```
-/// use keyrunes_rust_sdk::KeyrunesClient;
-///
-/// let client = KeyrunesClient::new("https://keyrunes.example.com/")
-///     .expect("Invalid URL");
 /// ```
 #[derive(Clone)]
 pub struct KeyrunesClient {
@@ -116,18 +92,10 @@ impl KeyrunesClient {
         let base_url = base_url.into();
         url::Url::parse(&base_url)?;
 
-        let mut headers = reqwest::header::HeaderMap::new();
-        if let Ok(org_key) = std::env::var(ENV_ORG_KEY) {
-            if let Ok(value) = reqwest::header::HeaderValue::from_str(&org_key) {
-                headers.insert(HEADER_ORG_KEY, value);
-            }
-        }
-
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             client: Client::builder()
-                .user_agent(USER_AGENT)
-                .default_headers(headers)
+                .user_agent("keyrunes-rust-sdk/0.1.0")
                 .build()?,
             token: Arc::new(RwLock::new(None)),
         })
@@ -139,7 +107,6 @@ impl KeyrunesClient {
     ///
     /// * `username` - Username or email
     /// * `password` - User password
-    /// * `namespace` - Optional namespace (defaults to "public")
     ///
     /// # Returns
     ///
@@ -154,24 +121,16 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password", None).await?;
+    /// let token = client.login("user@example.com", "password").await?;
     /// println!("Token: {}", token.token);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn login<S: Into<String>>(
-        &self,
-        username: S,
-        password: S,
-        namespace: Option<S>,
-    ) -> Result<Token> {
-        let url = format!("{}{}", self.base_url, ENDPOINT_LOGIN);
+    pub async fn login<S: Into<String>>(&self, username: S, password: S) -> Result<Token> {
+        let url = format!("{}/api/login", self.base_url);
         let credentials = LoginCredentials {
             identity: username.into(),
             password: password.into(),
-            namespace: namespace
-                .map(|n| n.into())
-                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
 
         let response = self.client.post(&url).json(&credentials).send().await?;
@@ -189,7 +148,6 @@ impl KeyrunesClient {
     /// * `username` - Username
     /// * `email` - User email
     /// * `password` - User password (minimum 8 characters)
-    /// * `namespace` - Optional namespace (defaults to "public")
     ///
     /// # Returns
     ///
@@ -204,7 +162,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let user = client.register("john_doe", "john@example.com", "password123", None).await?;
+    /// let user = client.register("john_doe", "john@example.com", "password123").await?;
     /// println!("User registered: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
@@ -214,16 +172,12 @@ impl KeyrunesClient {
         username: S,
         email: S,
         password: S,
-        namespace: Option<S>,
     ) -> Result<User> {
-        let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
+        let url = format!("{}/api/register", self.base_url);
         let registration = UserRegistration {
             username: username.into(),
             email: email.into(),
             password: password.into(),
-            namespace: namespace
-                .map(|n| n.into())
-                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
         };
 
         let response = self.client.post(&url).json(&registration).send().await?;
@@ -259,7 +213,8 @@ impl KeyrunesClient {
     ///
     /// Returns `Result<User, KeyrunesError>`:
     /// - `Ok(user)` if the user was successfully retrieved
-    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated or token is invalid
+    /// - `Err(KeyrunesError::InvalidToken)` if no token is stored
+    /// - `Err(KeyrunesError::AuthenticationError)` if token is invalid
     /// - `Err(KeyrunesError::NetworkError)` if there was a network error
     ///
     /// # Examples
@@ -268,142 +223,46 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// client.set_token("valid-token").await;
     /// let user = client.get_current_user().await?;
     /// println!("Current user: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
     /// ```
     pub async fn get_current_user(&self) -> Result<User> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
+        let token = self
+            .token
+            .read()
+            .await
+            .clone()
+            .ok_or(KeyrunesError::InvalidToken)?;
+        let url = format!("{}/api/me", self.base_url);
 
-        let url = format!("{}{}", self.base_url, ENDPOINT_ME);
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
+            .header("Authorization", format!("Bearer {}", token))
             .send()
             .await?;
 
-        let user_response = self
-            .handle_response::<crate::models::UserResponse>(response)
-            .await?;
-        Ok(crate::models::User::from(user_response))
+        let user_response: crate::models::UserResponse = self.handle_response(response).await?;
+        Ok(User::from(user_response))
     }
 
-    /// Registers a new administrator user.
+    /// Checks if the user belongs to a specific group.
     ///
     /// # Arguments
     ///
-    /// * `username` - Username
-    /// * `email` - Administrator email
-    /// * `password` - Administrator password (minimum 8 characters)
-    /// * `admin_key` - Administrator registration key
-    /// * `namespace` - Optional namespace (defaults to "public")
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<User, KeyrunesError>`:
-    /// - `Ok(user)` if registration was successful
-    /// - `Err(KeyrunesError::AuthenticationError)` if admin key is invalid
-    /// - `Err(KeyrunesError::HttpError)` if there was an error in the request
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let admin = client.register_admin("admin_user", "admin@example.com", "password123", "admin-key-123", None).await?;
-    /// println!("Admin registered: {} ({})", admin.username, admin.email);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn register_admin<S: Into<String>>(
-        &self,
-        username: S,
-        email: S,
-        password: S,
-        admin_key: S,
-        namespace: Option<S>,
-    ) -> Result<User> {
-        let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
-        let registration = AdminRegistration {
-            username: username.into(),
-            email: email.into(),
-            password: password.into(),
-            admin_key: admin_key.into(),
-            namespace: namespace
-                .map(|n| n.into())
-                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
-        };
-
-        let response = self.client.post(&url).json(&registration).send().await?;
-
-        let register_response: crate::models::RegisterResponse =
-            self.handle_response(response).await?;
-        Ok(crate::models::User::from(register_response.user))
-    }
-
-    /// Gets user information by ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - User ID
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<User, KeyrunesError>`:
-    /// - `Ok(user)` if the user was successfully retrieved
-    /// - `Err(KeyrunesError::UserNotFoundError)` if user doesn't exist
-    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated or token is invalid
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
-    /// let user = client.get_user("123").await?;
-    /// println!("User: {} ({})", user.username, user.email);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn get_user<S: Into<String>>(&self, user_id: S) -> Result<User> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
-
-        let user_id = user_id.into();
-        let url = format!("{}/api/users/{}", self.base_url, user_id);
-        let response = self
-            .client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
-            .send()
-            .await?;
-
-        let user_response = self
-            .handle_response::<crate::models::UserResponse>(response)
-            .await?;
-        Ok(crate::models::User::from(user_response))
-    }
-
-    /// Verifies if a user belongs to a specific group.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - User ID
-    /// * `group_id` - Group ID
+    /// * `user_id` - The user's ID
+    /// * `group_id` - The group ID to check
     ///
     /// # Returns
     ///
     /// Returns `Result<bool, KeyrunesError>`:
     /// - `Ok(true)` if user belongs to the group
-    /// - `Ok(false)` if user doesn't belong to the group
-    /// - `Err(KeyrunesError::GroupNotFoundError)` if group doesn't exist
-    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated
+    /// - `Ok(false)` if user does not belong to the group
+    /// - `Err(KeyrunesError::InvalidToken)` if no token is stored
+    /// - `Err(KeyrunesError::HttpError)` on other errors
     ///
     /// # Examples
     ///
@@ -411,319 +270,33 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
-    /// let has_access = client.has_group("123", "admins").await?;
-    /// if has_access {
-    /// #     println!("User has admin access");
-    /// # }
+    /// client.set_token("valid-token").await;
+    /// let is_admin = client.has_group("user123", "admins").await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn has_group<U: Into<String>, G: Into<String>>(
-        &self,
-        user_id: U,
-        group_id: G,
-    ) -> Result<bool> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
-
-        let user_id = user_id.into();
-        let group_id = group_id.into();
+    pub async fn has_group(&self, user_id: &str, group_id: &str) -> Result<bool> {
+        let token = self
+            .token
+            .read()
+            .await
+            .clone()
+            .ok_or(KeyrunesError::InvalidToken)?;
         let url = format!(
             "{}/api/users/{}/groups/{}",
             self.base_url, user_id, group_id
         );
+
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
+            .header("Authorization", format!("Bearer {}", token))
             .send()
             .await?;
 
-        let group_check = self.handle_response::<GroupCheck>(response).await?;
-        Ok(group_check.has_group)
+        let check: crate::models::GroupCheck = self.handle_response(response).await?;
+        Ok(check.has_group)
     }
-
-    /// Gets the list of groups for a user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - User ID (optional, if None uses current user)
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<Vec<String>, KeyrunesError>`:
-    /// - `Ok(groups)` if the groups were successfully retrieved
-    /// - `Err(KeyrunesError::UserNotFoundError)` if user doesn't exist
-    /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
-    /// let groups = client.get_user_groups(None::<&str>).await?;
-    /// println!("User groups: {:?}", groups);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn get_user_groups<S: Into<String>>(
-        &self,
-        user_id: Option<S>,
-    ) -> Result<Vec<String>> {
-        let user = if let Some(user_id) = user_id {
-            self.get_user(user_id).await?
-        } else {
-            self.get_current_user().await?
-        };
-        Ok(user.groups)
-    }
-
-    /// Clears the authentication token.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
-    /// client.clear_token().await;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn clear_token(&self) {
-        *self.token.write().await = None;
-    }
-
-    // New methods start here
-
-    /// Requests a password reset email.
-    ///
-    /// # Arguments
-    ///
-    /// * `email` - User email address
-    /// * `namespace` - Optional namespace (defaults to "public")
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<ForgotPasswordResponse, KeyrunesError>`:
-    /// - `Ok(response)` if the request was successful
-    /// - `Err(KeyrunesError::HttpError)` if the server returned an error
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let response = client.forgot_password("user@example.com", None).await?;
-    /// println!("Reset URL: {}", response.reset_url);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn forgot_password<S: Into<String>>(
-        &self,
-        email: S,
-        namespace: Option<S>,
-    ) -> Result<ForgotPasswordResponse> {
-        let url = format!("{}{}", self.base_url, ENDPOINT_FORGOT_PASSWORD);
-        let request = ForgotPasswordRequest {
-            email: email.into(),
-            namespace: namespace
-                .map(|n| n.into())
-                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
-        };
-        let response = self.client.post(&url).json(&request).send().await?;
-        self.handle_response::<ForgotPasswordResponse>(response)
-            .await
-    }
-
-    /// Resets a password using a token received via email.
-    ///
-    /// # Arguments
-    ///
-    /// * `token` - Password reset token from email
-    /// * `new_password` - New password to set
-    /// * `namespace` - Optional namespace (defaults to "public")
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<MessageResponse, KeyrunesError>`:
-    /// - `Ok(response)` if password was reset successfully
-    /// - `Err(KeyrunesError::HttpError)` if the token is invalid or expired
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let response = client.reset_password("reset-token-123", "newPassword456", None).await?;
-    /// println!("Message: {}", response.message);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn reset_password<S: Into<String>>(
-        &self,
-        token: S,
-        new_password: S,
-        namespace: Option<S>,
-    ) -> Result<MessageResponse> {
-        let url = format!("{}{}", self.base_url, ENDPOINT_RESET_PASSWORD);
-        let request = ResetPasswordRequest {
-            token: token.into(),
-            new_password: new_password.into(),
-            namespace: namespace
-                .map(|n| n.into())
-                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
-        };
-        let response = self.client.post(&url).json(&request).send().await?;
-        self.handle_response::<MessageResponse>(response).await
-    }
-
-    /// Changes the password of the currently authenticated user.
-    ///
-    /// # Arguments
-    ///
-    /// * `current_password` - User's current password
-    /// * `new_password` - New password to set
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<MessageResponse, KeyrunesError>`:
-    /// - `Ok(response)` if password was changed successfully
-    /// - `Err(KeyrunesError::InvalidToken)` if no token is set
-    /// - `Err(KeyrunesError::AuthenticationError)` if current password is wrong
-    /// - `Err(KeyrunesError::HttpError)` for other errors
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// client.set_token("user-token").await;
-    /// let response = client.change_password("oldPass123", "newPass456").await?;
-    /// println!("Message: {}", response.message);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn change_password<S: Into<String>>(
-        &self,
-        current_password: S,
-        new_password: S,
-    ) -> Result<MessageResponse> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
-
-        let url = format!("{}{}", self.base_url, ENDPOINT_CHANGE_PASSWORD);
-        let request = ChangePasswordRequest {
-            current_password: current_password.into(),
-            new_password: new_password.into(),
-        };
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
-            .json(&request)
-            .send()
-            .await?;
-        self.handle_response::<MessageResponse>(response).await
-    }
-
-    /// Admin-only: Resets a user's password and returns a temporary password.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - ID of the user to reset password for
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<PasswordResetResponse, KeyrunesError>`:
-    /// - `Ok(response)` if password was reset successfully
-    /// - `Err(KeyrunesError::InvalidToken)` if no token is set
-    /// - `Err(KeyrunesError::AuthorizationError)` if user is not an admin
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// client.set_token("admin-token").await;
-    /// let response = client.admin_reset_user_password("123").await?;
-    /// println!("Temporary password: {}", response.temporary_password);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn admin_reset_user_password<S: Into<String>>(
-        &self,
-        user_id: S,
-    ) -> Result<PasswordResetResponse> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
-
-        let user_id = user_id.into();
-        let url = format!(
-            "{}/api/admin/users/{}/reset-password",
-            self.base_url, user_id
-        );
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
-            .send()
-            .await?;
-        self.handle_response::<PasswordResetResponse>(response)
-            .await
-    }
-
-    /// Admin-only: Sends a password reset email to a user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - ID of the user to send reset email to
-    ///
-    /// # Returns
-    ///
-    /// Returns `Result<MessageResponse, KeyrunesError>`:
-    /// - `Ok(response)` if reset email was sent successfully
-    /// - `Err(KeyrunesError::InvalidToken)` if no token is set
-    /// - `Err(KeyrunesError::AuthorizationError)` if user is not an admin
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use keyrunes_rust_sdk::KeyrunesClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// client.set_token("admin-token").await;
-    /// let response = client.admin_send_password_reset("123").await?;
-    /// println!("Message: {}", response.message);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn admin_send_password_reset<S: Into<String>>(
-        &self,
-        user_id: S,
-    ) -> Result<MessageResponse> {
-        let token = self.token.read().await;
-        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?;
-
-        let user_id = user_id.into();
-        let url = format!("{}/api/admin/users/{}/send-reset", self.base_url, user_id);
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", token_value))
-            .send()
-            .await?;
-        self.handle_response::<MessageResponse>(response).await
-    }
-    // New methods end here
 
     async fn handle_response<T: for<'de> serde::Deserialize<'de>>(
         &self,
@@ -744,7 +317,7 @@ impl KeyrunesClient {
         &self,
         status: reqwest::StatusCode,
         body: &str,
-        url: &url::Url,
+        url: &reqwest::Url,
     ) -> KeyrunesError {
         let error_message = if body.trim_start().starts_with('<') {
             format!("HTTP {} - Received HTML response (endpoint may not exist or path is incorrect). Tried: {}", status.as_u16(), url)

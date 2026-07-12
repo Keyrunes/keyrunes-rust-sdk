@@ -1,7 +1,6 @@
 # Keyrunes Rust SDK
 
 A Rust library for integrating with the Keyrunes authentication and authorization service.
-[crates.io](https://crates.io/crates/keyrunes-rust-sdk)
 
 ## Features
 
@@ -12,7 +11,6 @@ A Rust library for integrating with the Keyrunes authentication and authorizatio
 - ✅ Custom and descriptive error types
 - ✅ Data models with serde
 - ✅ Fully asynchronous with Tokio
-- ✅ Password management (forgot, reset, change, admin reset)
 
 ## Installation
 
@@ -60,14 +58,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```
-
-### Organization Key
-
-If you need to access specific organization data in a multi-tenant environment, you can set the `KEYRUNES_ORG_KEY` environment variable. The client will automatically inject the `X-Organization-Key` header into requests.
-
-```bash
-export KEYRUNES_ORG_KEY=your-org-uuid
 ```
 
 ## Web Framework Integration
@@ -204,14 +194,6 @@ async fn my_controller(
 - `has_group(user_id, group_id)` - Verifies if user belongs to group
 - `get_user_groups(user_id)` - Gets list of user groups
 
-### Password Management
-
-- `forgot_password(email, namespace)` - Requests a password reset email
-- `reset_password(token, new_password, namespace)` - Resets password using token from email
-- `change_password(current_password, new_password)` - Changes password for authenticated user
-- `admin_reset_user_password(user_id)` - Admin resets user password, returns temporary password
-- `admin_send_password_reset(user_id)` - Admin sends password reset email to user
-
 ## Data Models
 
 - `User` - User model
@@ -220,12 +202,6 @@ async fn my_controller(
 - `UserRegistration` - User registration data
 - `AdminRegistration` - Administrator registration data
 - `LoginCredentials` - Login credentials
-- `ForgotPasswordRequest` - Forgot password request data
-- `ForgotPasswordResponse` - Forgot password response (message + reset URL)
-- `ResetPasswordRequest` - Reset password request data
-- `ChangePasswordRequest` - Change password request data
-- `MessageResponse` - Generic message response
-- `PasswordResetResponse` - Admin password reset response (temporary password)
 
 ## Error Handling
 
@@ -247,7 +223,6 @@ See the `examples/` folder for complete usage examples with each framework:
 - `actix_example.rs` - Actix Web integration
 - `rocket_example.rs` - Rocket integration
 - `loco_example.rs` - Loco integration
-- `password_management.rs` - Password management flow
 
 To run an example:
 

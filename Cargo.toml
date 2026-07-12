@@ -1,10 +1,10 @@
 [package]
 name = "keyrunes-rust-sdk"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
-authors = ["Jonatas Luiz de Oliveira <contact@jonatasoliveira.dev>"]
+authors = ["Keyrunes Contributors"]
 description = "Rust SDK for Keyrunes authentication and authorization service"
-license = "AGPL-3.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/Keyrunes/keyrunes-rust-sdk"
 
 [dependencies]
@@ -17,13 +17,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Error handling
-thiserror = "2"
+thiserror = "1.0"
 
 # Async traits
 async-trait = "0.1"
 
 # Framework integrations
-axum = { version = "0.8", optional = true }
+axum = { version = "0.7", optional = true }
 actix-web = { version = "4", optional = true }
 rocket = { version = "0.5", optional = true, features = ["json"] }
 
@@ -33,7 +33,6 @@ http = "1.0"
 # URL handling
 url = "2.5"
 
-# Date/time handling
 chrono = { version = "0.4", features = ["serde"] }
 
 [[example]]
@@ -59,15 +58,11 @@ required-features = ["rocket"]
 name = "loco_example"
 path = "examples/loco_example.rs"
 
-[[example]]
-name = "password_management"
-path = "examples/password_management.rs"
-
 [dev-dependencies]
 tokio-test = "0.4"
 mockito = "1.2"
-dotenvy = "0.15"
 tower = "0.5"
+dotenvy = "0.15"
 
 [features]
 default = []
