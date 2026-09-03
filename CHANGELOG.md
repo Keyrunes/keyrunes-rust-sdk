@@ -2,7 +2,66 @@
 
 The main changelog for the keyrunes rust sdk.
 
-## [unreleased]
+## [0.2.0] - 2026-09-03
+
+### Bug Fixes
+
+- Fix(sdk): match server auth contract — namespace in payloads, flat register response, group-by-name check (0.1.2)
+
+### Features
+
+- Feat(tests): add property-based and fuzz suites; fix UTF-8 truncation panic
+
+Add two new test suites and the tooling to measure them:
+
+- tests/property_test.rs (22 tests): proptest invariants over base URL
+  normalization and idempotence, schemeless URL rejection, panic-free
+  client construction, User id precedence, Token new-vs-legacy parsing,
+  namespace serialization, GroupCheck field aliases, and error Display
+  and From conversions.
+- tests/fuzz_test.rs (13 tests): arbitrary JSON fed to every model to prove
+  deserialization never panics, plus mockito transport cases covering
+  oversized, multibyte, HTML and empty error bodies.
+
+Fix the panic the fuzz suite found: handle_error sliced the error body at a
+fixed 200-byte index, which panics when that index lands inside a multi-byte
+character (for example 198 ASCII bytes followed by a 3-byte character).
+Truncation now walks left to the nearest UTF-8 boundary via
+truncate_on_char_boundary.
+
+Also add KeyrunesClient::base_url(), since integration tests are separate
+crates and could not otherwise observe the normalized URL.
+
+.cargo/mutants.toml configures cargo-mutants. Of 33 viable mutants, 31 are
+caught and 1 is killed by timeout; the single survivor is equivalent
+(`end >= 0` on a usize is always true, and is_char_boundary(0) is always
+true, so the loop terminates identically).
+
+## [0.1.2] - 2026-07-12
+
+### Bug Fixes
+
+- Fix(ci): resolve fmt failures and add daily scheduled CI run
+
+- Run cargo fmt to fix formatting violations in 8 files
+- Add schedule trigger for daily CI at midnight UTC (cron: '0 0 * * *')
+- All 120 tests pass, clippy clean
+- Fix(test): gate middleware module with loco feature
+
+Add feature='loco' to middleware module gate so that
+tests/loco_test.rs can import middleware::loco::* when
+running with --features loco (or loco alone).
+- Fix(ci): resolve fmt and loco_test compilation errors
+
+- Run cargo fmt to expand long cfg line in src/lib.rs
+- Add #![cfg(...)] gate to tests/loco_test.rs so it only
+  compiles when a framework feature (axum/actix/rocket) is enabled
+
+### Build System
+
+- Build: Update CHANGELOG
+- Add updates in changelog
+- fix build CI errors
 
 ### Features
 
@@ -13,6 +72,7 @@ The main changelog for the keyrunes rust sdk.
 - Add 3 ENDPOINT constants for password endpoints
 - Add 11 client tests + 3 model tests
 - All 48 tests pass
+- Feat: update libs for audit problems
 
 ### Miscellaneous Tasks
 
@@ -31,6 +91,8 @@ All tests pass, all features compile, clippy clean.
 - Chore: Up[date CHANGELOG
 -  Add updates in changelog
 - Remove convencional commits for true in this moment
+- Chore: Release keyrunes-rust-sdk version 0.1.1
+- Chore: Update Changelog
 
 ### Testing
 
