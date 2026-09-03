@@ -20,7 +20,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-keyrunes-rust-sdk = { version = "0.1.0", features = ["axum"] }  # or "actix", "rocket", etc.
+keyrunes-rust-sdk = { version = "0.2.0", features = ["axum"] }  # or "actix", "rocket", etc.
 ```
 
 ### Available Features
@@ -33,7 +33,7 @@ keyrunes-rust-sdk = { version = "0.1.0", features = ["axum"] }  # or "actix", "r
 You can enable multiple features:
 
 ```toml
-keyrunes-rust-sdk = { version = "0.1.0", features = ["axum", "actix"] }
+keyrunes-rust-sdk = { version = "0.2.0", features = ["axum", "actix"] }
 ```
 
 ## Basic Usage
