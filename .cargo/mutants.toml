@@ -1,0 +1,19 @@
+# cargo-mutants configuration.
+#
+# `mutagen` (llogiq/mutagen) is unmaintained and nightly-only; cargo-mutants is
+# its de-facto successor and runs on stable.
+
+# Framework middleware is feature-gated and exercised through the integration
+# tests of each framework, which are not part of the default feature set.
+exclude_globs = ["src/middleware/**"]
+
+# Trait impls that only forward to `to_string()` produce mutants that no
+# behavioural test can distinguish.
+exclude_re = [
+    "impl Display",
+]
+
+# The baseline suite takes about a minute; give a mutant a generous multiple
+# before calling it a timeout rather than a survivor.
+timeout_multiplier = 5.0
+minimum_test_timeout = 60

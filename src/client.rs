@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Constants
-const USER_AGENT: &str = "keyrunes-rust-sdk/0.1.2";
+const USER_AGENT: &str = "keyrunes-rust-sdk/0.2.0";
 const HEADER_ORG_KEY: &str = "X-Organization-Key";
 const ENV_ORG_KEY: &str = "KEYRUNES_ORG_KEY";
 
@@ -35,6 +35,26 @@ const ENDPOINT_ME: &str = "/api/me";
 const ENDPOINT_FORGOT_PASSWORD: &str = "/api/forgot-password";
 const ENDPOINT_RESET_PASSWORD: &str = "/api/reset-password";
 const ENDPOINT_CHANGE_PASSWORD: &str = "/api/user/change-password";
+
+/// How many bytes of an unparseable error body are echoed back to the caller.
+const ERROR_BODY_PREVIEW_BYTES: usize = 200;
+
+/// Truncates `input` to at most `max_bytes`, moving left to the nearest UTF-8
+/// character boundary.
+///
+/// Slicing a `str` at an arbitrary byte index panics when the index lands
+/// inside a multi-byte character, which a plain-text error body from an
+/// upstream proxy can easily trigger.
+fn truncate_on_char_boundary(input: &str, max_bytes: usize) -> &str {
+    if input.len() <= max_bytes {
+        return input;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
+    }
+    &input[..end]
+}
 // New constants end here
 
 /// Client for interacting with the Keyrunes API
@@ -131,6 +151,25 @@ impl KeyrunesClient {
                 .build()?,
             token: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Returns the normalized base URL this client targets.
+    ///
+    /// The value has every trailing slash stripped, so it can be concatenated
+    /// with an endpoint path that starts with `/` without producing a double
+    /// slash.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use keyrunes_rust_sdk::KeyrunesClient;
+    ///
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com///")?;
+    /// assert_eq!(client.base_url(), "https://keyrunes.example.com");
+    /// # Ok::<(), keyrunes_rust_sdk::KeyrunesError>(())
+    /// ```
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// Performs login and returns the authentication token.
@@ -791,8 +830,11 @@ impl KeyrunesClient {
                         .to_string()
                 })
                 .unwrap_or_else(|_| {
-                    if body.len() > 200 {
-                        format!("{}...", &body[..200])
+                    if body.len() > ERROR_BODY_PREVIEW_BYTES {
+                        format!(
+                            "{}...",
+                            truncate_on_char_boundary(body, ERROR_BODY_PREVIEW_BYTES)
+                        )
                     } else {
                         body.to_string()
                     }
@@ -814,5 +856,62 @@ impl KeyrunesClient {
             }
             _ => KeyrunesError::HttpError(format!("HTTP {}: {}", status.as_u16(), error_message)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{truncate_on_char_boundary, ERROR_BODY_PREVIEW_BYTES};
+
+    #[test]
+    fn short_input_is_returned_untouched() {
+        assert_eq!(truncate_on_char_boundary("abc", 10), "abc");
+    }
+
+    #[test]
+    fn input_exactly_at_the_limit_is_returned_untouched() {
+        let input = "a".repeat(10);
+        assert_eq!(truncate_on_char_boundary(&input, 10), input);
+    }
+
+    #[test]
+    fn ascii_input_is_cut_exactly_at_the_limit() {
+        let input = "a".repeat(50);
+        assert_eq!(truncate_on_char_boundary(&input, 10).len(), 10);
+    }
+
+    #[test]
+    fn a_cut_inside_a_multibyte_character_moves_left() {
+        // "€" is three bytes, so a limit of 4 lands inside the second one.
+        let input = "€€€";
+        let truncated = truncate_on_char_boundary(input, 4);
+        assert_eq!(truncated, "€");
+        assert_eq!(truncated.len(), 3);
+    }
+
+    #[test]
+    fn a_cut_landing_on_a_boundary_keeps_the_whole_character() {
+        let input = "€€€";
+        assert_eq!(truncate_on_char_boundary(input, 6), "€€");
+    }
+
+    #[test]
+    fn a_limit_shorter_than_the_first_character_yields_an_empty_string() {
+        assert_eq!(truncate_on_char_boundary("€", 2), "");
+    }
+
+    #[test]
+    fn a_zero_limit_yields_an_empty_string() {
+        assert_eq!(truncate_on_char_boundary("abc", 0), "");
+    }
+
+    #[test]
+    fn the_preview_limit_never_splits_a_character() {
+        // The exact shape that used to panic: 198 ASCII bytes followed by a
+        // three-byte character spanning bytes 198..201.
+        let input = format!("{}{}", "a".repeat(198), "€".repeat(5));
+        let truncated = truncate_on_char_boundary(&input, ERROR_BODY_PREVIEW_BYTES);
+        assert_eq!(truncated.len(), 198);
+        assert!(input.starts_with(truncated));
     }
 }
