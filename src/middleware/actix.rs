@@ -7,6 +7,7 @@ use actix_web::{
 };
 use std::{
     future::{ready, Ready},
+    pin::Pin,
     rc::Rc,
     sync::Arc,
 };
@@ -80,8 +81,7 @@ where
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
-    type Future =
-        std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
+    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
 
     forward_ready!(service);
 
@@ -115,6 +115,7 @@ pub async fn require_group(
     let user = AuthenticatedUser::from_request(req, &mut actix_web::dev::Payload::None).await?;
 
     if let Some(state) = req.app_data::<actix_web::web::Data<KeyrunesState>>() {
+        #[allow(deprecated)]
         let has_group = state
             .client
             .has_group(&user.user.id, group_id)

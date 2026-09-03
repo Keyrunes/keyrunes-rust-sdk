@@ -12,6 +12,7 @@
 //! let creds = LoginCredentials {
 //!     identity: "user@example.com".to_string(),
 //!     password: "password123".to_string(),
+//!     namespace: "public".to_string(),
 //! };
 //!
 //! let json = serde_json::to_string(&creds).unwrap();
@@ -49,7 +50,7 @@ pub(crate) struct UserResponse {
     #[serde(default, rename = "id")]
     id_str: Option<String>,
     #[serde(default, rename = "user_id")]
-    user_id_num: Option<u64>,
+    user_id_num: Option<i64>,
     #[serde(default, rename = "external_id")]
     external_id_str: Option<String>,
     username: String,
@@ -82,17 +83,6 @@ impl From<UserResponse> for User {
             updated_at: response.updated_at,
         }
     }
-}
-
-/// Registration response wrapper
-#[derive(Debug, Clone, Deserialize)]
-pub struct RegisterResponse {
-    #[doc(hidden)]
-    pub(crate) user: UserResponse,
-    #[serde(default)]
-    pub token: Option<String>,
-    #[serde(default)]
-    pub requires_password_change: Option<bool>,
 }
 
 /// Group model
@@ -203,6 +193,11 @@ pub struct UserRegistration {
     pub email: String,
     /// User password (minimum 8 characters)
     pub password: String,
+    /// Namespace — ALWAYS serialized. When the caller passes `None` the
+    /// client fills [`DEFAULT_NAMESPACE`] ("public"); the server rejects
+    /// payloads without `namespace` with 422.
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
 }
 
 /// Administrator registration data
@@ -218,6 +213,9 @@ pub struct AdminRegistration {
     pub password: String,
     /// Administrator key
     pub admin_key: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
 }
 
 /// Login credentials
@@ -229,6 +227,22 @@ pub struct LoginCredentials {
     pub identity: String,
     /// User password
     pub password: String,
+    /// Namespace — ALWAYS serialized. When the caller passes `None` the
+    /// client fills [`DEFAULT_NAMESPACE`] ("public"); the server rejects
+    /// payloads without `namespace` with 422.
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Default namespace value: "public".
+///
+/// Used by the client whenever a `namespace: Option<S>` argument receives
+/// `None`; the resulting payload still carries the field, as the server
+/// requires it.
+pub const DEFAULT_NAMESPACE: &str = "public";
+
+fn default_namespace() -> String {
+    DEFAULT_NAMESPACE.to_string()
 }
 
 /// Group verification result
@@ -237,6 +251,7 @@ pub struct LoginCredentials {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupCheck {
     /// Indicates whether the user belongs to the group
+    #[serde(alias = "has_access", alias = "has_group")]
     pub has_group: bool,
 }
 
@@ -251,4 +266,70 @@ pub struct GroupVerificationResponse {
     pub group_id: String,
     /// Indicates whether the user belongs to the group
     pub has_group: bool,
+}
+
+/// Forgot password request
+///
+/// Used to request a password reset email.
+#[derive(Debug, Clone, Serialize)]
+pub struct ForgotPasswordRequest {
+    /// User email address
+    pub email: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Forgot password response
+///
+/// Response from the forgot-password endpoint.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ForgotPasswordResponse {
+    /// Status message
+    pub message: String,
+    /// Password reset URL with token
+    pub reset_url: String,
+}
+
+/// Reset password request
+///
+/// Used to reset a password using a token received via email.
+#[derive(Debug, Clone, Serialize)]
+pub struct ResetPasswordRequest {
+    /// Password reset token
+    pub token: String,
+    /// New password
+    pub new_password: String,
+    /// Namespace (default: "public")
+    #[serde(default = "default_namespace")]
+    pub namespace: String,
+}
+
+/// Change password request
+///
+/// Used to change the password of the currently authenticated user.
+#[derive(Debug, Clone, Serialize)]
+pub struct ChangePasswordRequest {
+    /// Current password
+    pub current_password: String,
+    /// New password
+    pub new_password: String,
+}
+
+/// Generic message response
+///
+/// Used by multiple endpoints that return only a message.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MessageResponse {
+    /// Status message
+    pub message: String,
+}
+
+/// Admin password reset response
+///
+/// Response from the admin reset-password endpoint containing a temporary password.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PasswordResetResponse {
+    /// Generated temporary password
+    pub temporary_password: String,
 }

@@ -2,8 +2,7 @@
 
 use crate::{KeyrunesClient, KeyrunesError, User};
 use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts, Query},
+    extract::{FromRequestParts, Query},
     http::request::Parts,
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -32,15 +31,13 @@ pub struct AuthenticatedUser {
     pub user: User,
 }
 
-#[async_trait]
-impl<S> FromRequestParts<S> for AuthenticatedUser
-where
-    S: Send + Sync + Clone,
-    KeyrunesState: FromRef<S>,
-{
+impl FromRequestParts<KeyrunesState> for AuthenticatedUser {
     type Rejection = KeyrunesRejection;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &KeyrunesState,
+    ) -> Result<Self, Self::Rejection> {
         let auth_header = parts
             .headers
             .get("authorization")
@@ -51,7 +48,7 @@ where
             .strip_prefix("Bearer ")
             .ok_or(KeyrunesRejection::InvalidToken)?;
 
-        let keyrunes_state = KeyrunesState::from_ref(state);
+        let keyrunes_state = state;
 
         keyrunes_state.client.set_token(token.to_string()).await;
         let user = keyrunes_state
@@ -71,15 +68,13 @@ pub struct RequireGroup {
     pub group_id: String,
 }
 
-#[async_trait]
-impl<S> FromRequestParts<S> for RequireGroup
-where
-    S: Send + Sync + Clone,
-    KeyrunesState: FromRef<S>,
-{
+impl FromRequestParts<KeyrunesState> for RequireGroup {
     type Rejection = KeyrunesRejection;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &KeyrunesState,
+    ) -> Result<Self, Self::Rejection> {
         let authenticated_user = AuthenticatedUser::from_request_parts(parts, state).await?;
 
         let query_params = parts
@@ -91,8 +86,9 @@ where
             .get("group_id")
             .ok_or(KeyrunesRejection::MissingGroup)?;
 
-        let keyrunes_state = KeyrunesState::from_ref(state);
+        let keyrunes_state = state;
 
+        #[allow(deprecated)]
         let has_group = keyrunes_state
             .client
             .has_group(&authenticated_user.user.id, group_id)
@@ -119,19 +115,18 @@ pub struct RequireAdmin {
     pub user: User,
 }
 
-#[async_trait]
-impl<S> FromRequestParts<S> for RequireAdmin
-where
-    S: Send + Sync + Clone,
-    KeyrunesState: FromRef<S>,
-{
+impl FromRequestParts<KeyrunesState> for RequireAdmin {
     type Rejection = KeyrunesRejection;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &KeyrunesState,
+    ) -> Result<Self, Self::Rejection> {
         let authenticated_user = AuthenticatedUser::from_request_parts(parts, state).await?;
 
-        let keyrunes_state = KeyrunesState::from_ref(state);
+        let keyrunes_state = state;
 
+        #[allow(deprecated)]
         let is_admin = keyrunes_state
             .client
             .has_group(&authenticated_user.user.id, "admins")

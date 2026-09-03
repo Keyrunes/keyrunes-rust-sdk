@@ -32,14 +32,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Username: {}", username);
     println!("Email: {}", email);
 
-    match client.register(&username, &email, &password).await {
+    match client.register(&username, &email, &password, None).await {
         Ok(user) => println!("User registered: {} ({})", user.username, user.email),
         Err(e) => println!("x Error registering: {}", e),
     }
 
     println!("\nLogging in...");
-    match client.login(&username, &password).await {
-        Ok(token) => println!("Login successful! Token: {}", token.token),
+    match client.login(&username, &password, None).await {
+        Ok(token) => {
+            println!("Login successful! Token: {}", token.token);
+
+            println!("\nGetting current user...");
+            match client.get_current_user().await {
+                Ok(user) => {
+                    println!("Current user: {} ({})", user.username, user.email);
+                    println!("User groups: {:?}", user.groups);
+
+                    println!("\nTesting get_user_groups...");
+                    match client.get_user_groups(None::<&str>).await {
+                        Ok(groups) => println!("Groups: {:?}", groups),
+                        Err(e) => println!("x Error getting groups: {}", e),
+                    }
+
+                    println!("\nTesting clear_token...");
+                    client.clear_token().await;
+                    match client.get_current_user().await {
+                        Ok(_) => println!("Token still valid (unexpected)"),
+                        Err(_) => println!("Token cleared successfully"),
+                    }
+                }
+                Err(e) => println!("x Error getting current user: {}", e),
+            }
+        }
         Err(e) => println!("x Login error: {}", e),
     }
 

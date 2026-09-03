@@ -33,7 +33,7 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let auth_header = match request.headers().get_one("authorization") {
-            Some(h) => h,
+            Some(header) => header,
             None => {
                 return Outcome::Error((
                     rocket::http::Status::Unauthorized,
@@ -53,7 +53,7 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
         };
 
         let state = match request.guard::<&State<KeyrunesState>>().await {
-            rocket::request::Outcome::Success(s) => s,
+            Outcome::Success(s) => s,
             _ => {
                 return Outcome::Error((
                     rocket::http::Status::InternalServerError,
@@ -113,6 +113,7 @@ impl<'r> FromRequest<'r> for RequireGroup {
             }
         };
 
+        #[allow(deprecated)]
         match state
             .client
             .has_group(&authenticated_user.user.id, &group_id)
@@ -166,6 +167,7 @@ impl<'r> FromRequest<'r> for RequireAdmin {
             }
         };
 
+        #[allow(deprecated)]
         match state
             .client
             .has_group(&authenticated_user.user.id, "admins")

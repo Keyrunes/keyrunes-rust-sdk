@@ -9,8 +9,8 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-//! let user = client.register("john", "john@example.com", "password123").await?;
-//! let token = client.login("john", "password123").await?;
+//! let user = client.register("john", "john@example.com", "password123", None).await?;
+//! let token = client.login("john", "password123", None).await?;
 //! # Ok(())
 //! # }
 //! ```

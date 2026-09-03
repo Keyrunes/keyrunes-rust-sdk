@@ -4,7 +4,7 @@
 extern crate rocket;
 
 use keyrunes_rust_sdk::{
-    middleware::rocket::{AuthenticatedUser, KeyrunesState, RequireAdmin, RequireGroup},
+    middleware::rocket::{AuthenticatedUser, KeyrunesState, RequireAdmin},
     KeyrunesClient,
 };
 use rocket::serde::json::Json;
@@ -24,7 +24,7 @@ fn rocket() -> _ {
 
     rocket::build()
         .manage(state)
-        .mount("/", routes![get_current_user, admin_only, require_group])
+        .mount("/", routes![get_current_user, admin_only])
 }
 
 /// Route that requires authentication (current user)
@@ -44,12 +44,4 @@ fn admin_only(_admin: RequireAdmin) -> Json<Message> {
     Json(Message {
         message: "Administrative access granted".to_string(),
     })
-}
-
-/// Route that requires a specific group
-#[get("/group")]
-fn require_group(_group: RequireGroup) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "message": "User has required group membership",
-    }))
 }

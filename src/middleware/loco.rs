@@ -47,6 +47,7 @@ pub async fn get_user_from_token(
 }
 
 /// Helper to verify if the user belongs to a group
+#[allow(deprecated)]
 pub async fn require_group(
     client: &KeyrunesClient,
     user: &AuthenticatedUser,
