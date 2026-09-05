@@ -158,7 +158,10 @@ async fn long_ascii_error_body_is_truncated_not_dropped() {
 
     // #assert
     let message = result.unwrap_err().to_string();
-    assert!(message.contains("..."), "expected truncation marker: {message}");
+    assert!(
+        message.contains("..."),
+        "expected truncation marker: {message}"
+    );
     assert!(message.len() < body.len(), "body was not truncated");
     mock.assert_async().await;
 }
