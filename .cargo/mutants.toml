@@ -1,19 +1,29 @@
 # cargo-mutants configuration.
 #
-# `mutagen` (llogiq/mutagen) is unmaintained and nightly-only; cargo-mutants is
-# its de-facto successor and runs on stable.
-
-# Framework middleware is feature-gated and exercised through the integration
-# tests of each framework, which are not part of the default feature set.
-exclude_globs = ["src/middleware/**"]
+# `mutagen` (llogiq/mutagen) is the better-known name for this in Rust, but it
+# is unmaintained and nightly-only; cargo-mutants is its de-facto successor and
+# runs on stable.
+#
+# Coverage says a line ran. This says whether anything would have complained
+# had it done the wrong thing: one expression at a time is rewritten and the
+# suite is rerun, and a mutant that survives marks a line no assertion
+# constrains. The gate is all-or-nothing — cargo-mutants exits 2 on any
+# surviving viable mutant — so there is no allowance here for known survivors.
+# There are none, and the answer to a new one is a test rather than an entry in
+# this file.
+#
+# Which files are examined is decided by `scripts/mutants.sh`, not here: the
+# framework middleware only compiles with its feature enabled, and enabling it
+# drags in the whole framework, so it is mutated in a pass of its own.
 
 # Trait impls that only forward to `to_string()` produce mutants that no
-# behavioural test can distinguish.
+# behavioural test can distinguish from the original.
 exclude_re = [
     "impl Display",
 ]
 
-# The baseline suite takes about a minute; give a mutant a generous multiple
-# before calling it a timeout rather than a survivor.
-timeout_multiplier = 5.0
-minimum_test_timeout = 60
+# The suite runs in under ten seconds. A mutant several times slower than that
+# is stuck rather than slow, and the sooner it is called a timeout the sooner
+# the run ends.
+timeout_multiplier = 4.0
+minimum_test_timeout = 30

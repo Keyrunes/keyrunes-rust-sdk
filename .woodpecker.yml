@@ -1,6 +1,11 @@
 when:
   event: [push, pull_request]
 
+# Kept in step with .github/workflows/ci.yml and .pre-commit-config.yaml: the
+# three run the same gates, so a green commit stays green in either pipeline.
+variables:
+  - &rust_image rust:1.98
+
 steps:
   - name: Checkout
     image: alpine/git
@@ -9,56 +14,50 @@ steps:
       - git checkout $CI_COMMIT_SHA
 
   - name: Rust Setup
-    image: rust:1.75
+    image: *rust_image
     commands:
       - rustup component add rustfmt clippy
       - rustc --version
       - cargo --version
 
   - name: Format Check
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo fmt --all -- --check
 
   - name: Clippy
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo clippy --all-targets --all-features -- -D warnings
 
   - name: Security Audit
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo install cargo-audit --locked
-      - cargo audit
+      - ./scripts/audit.sh
 
   - name: Build
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo build --all-features --verbose
 
   - name: Test
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo test --all-features --verbose
 
+  - name: Mutation Testing
+    image: *rust_image
+    commands:
+      - cargo install cargo-mutants --locked
+      - ./scripts/mutants.sh core
+      - ./scripts/mutants.sh middleware
+
   - name: Coverage
-    image: rust:1.75
+    image: *rust_image
     commands:
       - cargo install cargo-llvm-cov --locked
-      - cargo llvm-cov --all-features --locked --lcov --output-path lcov.info
-      - cargo llvm-cov --all-features --locked --summary-only
+      - rustup component add llvm-tools-preview
+      - ./scripts/coverage-check.sh
     coverage:
       - lcov.info
-
-  - name: Coverage Check
-    image: rust:1.75
-    commands:
-      - cargo install cargo-llvm-cov --locked
-      - |
-        COVERAGE=$(cargo llvm-cov --all-features --locked --summary-only | grep -oP 'Total.*\K\d+\.\d+' | head -1)
-        echo "Coverage: ${COVERAGE}%"
-        if (( $(echo "$COVERAGE < 90" | bc -l) )); then
-          echo "Coverage is below 90%"
-          exit 1
-        fi
-

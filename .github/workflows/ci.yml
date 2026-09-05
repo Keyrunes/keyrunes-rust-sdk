@@ -17,11 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: rustfmt
-          override: true
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -30,11 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: clippy
-          override: true
+      - uses: Swatinem/rust-cache@v2
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -43,14 +40,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
+      # Wraps `cargo audit` with the floor that keeps the one documented
+      # advisory exception from widening. See .cargo/audit.toml.
       - name: Run security audit
-        run: cargo audit
+        run: ./scripts/audit.sh
 
   build:
     name: Build
@@ -65,10 +61,7 @@ jobs:
           - "axum,actix"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: |
@@ -91,10 +84,7 @@ jobs:
           - "axum,actix"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: |
@@ -104,34 +94,48 @@ jobs:
             cargo test --features "${{ matrix.features }}" --verbose
           fi
 
+  mutants:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The middleware compiles only with its feature enabled, so it is
+        # mutated in a pass of its own. See scripts/mutants.sh.
+        scope: [core, middleware]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+      # Coverage proves the lines ran; this proves an assertion would have
+      # noticed had they done the wrong thing.
+      - name: Run mutation testing
+        run: ./scripts/mutants.sh ${{ matrix.scope }}
+      - name: Upload the mutant report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-out-${{ matrix.scope }}
+          path: mutants.out/
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
-      - name: Generate coverage
-        run: cargo llvm-cov --all-features --locked --lcov --output-path lcov.info
+      - name: Generate coverage and check the threshold
+        run: ./scripts/coverage-check.sh
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           file: ./lcov.info
           flags: unittests
           name: codecov-umbrella
-      - name: Check coverage threshold
-        run: |
-          COVERAGE=$(cargo llvm-cov --all-features --locked --summary-only | grep -oP 'Total.*\K\d+\.\d+' | head -1 || echo "0")
-          echo "Coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 90" | bc -l) )); then
-            echo "❌ Coverage is below 90% (current: ${COVERAGE}%)"
-            exit 1
-          else
-            echo "✅ Coverage is above 90% (current: ${COVERAGE}%)"
-          fi
-

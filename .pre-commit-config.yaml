@@ -1,3 +1,9 @@
+# Every gate the CI enforces also runs here, so a red pipeline is something you
+# chose rather than something you discovered twenty minutes later.
+#
+# The heavy hooks — build, test, coverage, mutation — run only when Rust or the
+# manifest changed, and are ordered cheapest-first so an obvious failure stops
+# the run early.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -29,14 +35,37 @@ repos:
     hooks:
       - id: cargo-audit
         name: cargo audit
-        entry: cargo audit
+        entry: scripts/audit.sh
         language: system
-        types: [rust]
-        pass_filenames: false
-      - id: cargo-test
-        name: cargo test
-        entry: cargo test
-        language: system
-        types: [rust]
+        files: ^(Cargo\.(toml|lock)|\.cargo/audit\.toml|scripts/audit\.sh)$
         pass_filenames: false
 
+      - id: cargo-build
+        name: cargo build (all features)
+        entry: cargo build --all-features
+        language: system
+        files: (\.rs$|^Cargo\.(toml|lock)$)
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test (all features)
+        entry: cargo test --all-features
+        language: system
+        files: (\.rs$|^Cargo\.(toml|lock)$)
+        pass_filenames: false
+
+      - id: cargo-coverage
+        name: coverage threshold
+        entry: scripts/coverage-check.sh
+        language: system
+        files: (\.rs$|^Cargo\.(toml|lock)$)
+        pass_filenames: false
+
+      # Last because it is the slowest: it reruns the suite once per mutant.
+      # See scripts/mutants.sh and .cargo/mutants.toml.
+      - id: cargo-mutants
+        name: cargo mutants
+        entry: scripts/mutants.sh core
+        language: system
+        files: (\.rs$|^Cargo\.(toml|lock)$)
+        pass_filenames: false

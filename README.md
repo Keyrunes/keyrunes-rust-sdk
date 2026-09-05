@@ -255,6 +255,49 @@ To run an example:
 cargo run --example basic_usage --features axum
 ```
 
+## Testing
+
+```bash
+cargo test --all-features        # the whole suite
+./scripts/coverage-check.sh      # coverage, gated at 90% of lines
+./scripts/audit.sh               # advisories, with the h2 exception guarded
+./scripts/mutants.sh core        # mutation testing, library
+./scripts/mutants.sh middleware  # mutation testing, framework adapters
+```
+
+Four kinds of test sit behind those commands.
+
+**Example-based** tests (`tests/client_test.rs`, `tests/models_test.rs`, the
+per-framework suites) pin the behaviour of one call against a mocked server.
+
+**Property-based** tests (`tests/property_test.rs`, `tests/fuzz_test.rs`) state
+what must hold for any input and let `proptest` search for a counter-example.
+
+**Exhaustive** tests (`tests/exhaustive_test.rs`, and the module at the end of
+`src/client.rs`) enumerate a modelled input space in full rather than sampling
+it: every combination of the three ID fields a Keyrunes response may carry,
+every shape an error body may arrive in, every way a base URL may be typed. The
+cases that break a parser are rarely the ones a test author thinks to write
+down — a field present but `null`, an ID that is the empty string, a body
+sitting exactly on the preview limit — so they are not left to chance.
+
+**Mutation** testing closes the loop. Coverage says a line ran; `cargo-mutants`
+rewrites one expression at a time and reruns the suite, so a surviving mutant
+marks a line that ran without anything checking what it did. The gate fails on
+any survivor.
+
+Every one of these gates also runs as a pre-commit hook, so the pipeline holds
+no surprises. Installing them:
+
+```bash
+pre-commit install
+cargo install cargo-mutants cargo-audit cargo-llvm-cov --locked
+```
+
+The Rust hooks are scoped to `*.rs` and the manifest, so a documentation commit
+still costs nothing. If the full set is too slow for your loop, move the
+`cargo-coverage` and `cargo-mutants` hooks to `stages: [pre-push]`.
+
 ## Requirements
 
 - Rust 1.70+
