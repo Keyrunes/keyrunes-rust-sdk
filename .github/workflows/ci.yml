@@ -48,6 +48,26 @@ jobs:
       - name: Run security audit
         run: ./scripts/audit.sh
 
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Cargo.toml is the single source for the number; the README quotes it
+      # and this job is what keeps both honest.
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: |
+          version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$version" || { echo "Cargo.toml declares no rust-version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Check on the declared minimum
+        run: cargo check --all-features --all-targets
+
   build:
     name: Build
     runs-on: ubuntu-latest

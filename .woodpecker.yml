@@ -36,6 +36,14 @@ steps:
       - cargo install cargo-audit --locked
       - ./scripts/audit.sh
 
+  - name: MSRV
+    image: *rust_image
+    commands:
+      - MSRV=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+      - test -n "$MSRV"
+      - rustup toolchain install "$MSRV" --profile minimal
+      - cargo "+$MSRV" check --all-features --all-targets
+
   - name: Build
     image: *rust_image
     commands:

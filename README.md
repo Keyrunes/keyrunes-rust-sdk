@@ -20,7 +20,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-keyrunes-rust-sdk = { version = "0.2.0", features = ["axum"] }  # or "actix", "rocket", etc.
+keyrunes-rust-sdk = { version = "0.2", features = ["axum"] }  # or "actix", "rocket", etc.
 ```
 
 ### Available Features
@@ -33,7 +33,7 @@ keyrunes-rust-sdk = { version = "0.2.0", features = ["axum"] }  # or "actix", "r
 You can enable multiple features:
 
 ```toml
-keyrunes-rust-sdk = { version = "0.2.0", features = ["axum", "actix"] }
+keyrunes-rust-sdk = { version = "0.2", features = ["axum", "actix"] }
 ```
 
 ## Basic Usage
@@ -46,16 +46,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a new client instance
     let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     
-    // Perform login
-    let token = client.login("user@example.com", "password").await?;
+    // Perform login. The last argument is the namespace; `None` means
+    // "public", which the server requires and the client always sends.
+    let token = client.login("user@example.com", "password", None).await?;
     println!("Token: {}", token.token);
     
     // Get current user
     let user = client.get_current_user().await?;
     println!("User: {:?}", user);
     
-    // Verify groups
-    let groups = client.get_user_groups(None).await?;
+    // Groups of the current user. `None` asks about whoever the token
+    // belongs to; the turbofish names the string type that is being
+    // omitted, which nothing else in the call can tell the compiler.
+    let groups = client.get_user_groups(None::<&str>).await?;
     println!("Groups: {:?}", groups);
     
     Ok(())
@@ -75,11 +78,7 @@ export KEYRUNES_ORG_KEY=your-org-uuid
 ### Axum
 
 ```rust
-use axum::{
-    extract::State,
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use keyrunes_rust_sdk::{
     middleware::axum::{AuthenticatedUser, KeyrunesState},
     KeyrunesClient,
@@ -89,14 +88,17 @@ use keyrunes_rust_sdk::{
 async fn main() {
     let client = KeyrunesClient::new("https://keyrunes.example.com").unwrap();
     let state = KeyrunesState::new(client);
-    
-    let app = Router::new()
-        .route("/me", get(|user: AuthenticatedUser| async move {
-            format!("Hello, {}!", user.user.username)
-        }))
-        .with_state(state);
-    
-    // ... start server
+
+    let app = Router::new().route("/me", get(get_me)).with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+
+// The extractor pulls the caller out of the request, so a route that names
+// `AuthenticatedUser` cannot be reached without a valid token.
+async fn get_me(user: AuthenticatedUser) -> String {
+    format!("Hello, {}!", user.user.username)
 }
 ```
 
@@ -186,11 +188,15 @@ async fn my_controller(
 
 ## Client API
 
+Every `namespace` argument is an `Option`: `None` sends the default,
+`"public"`. The field is always serialised, because the server rejects a
+payload without it.
+
 ### Authentication
 
-- `login(email, password)` - Performs login and returns token
-- `register(username, email, password)` - Registers new user
-- `register_admin(username, email, password, admin_key)` - Registers administrator
+- `login(identity, password, namespace)` - Performs login and returns token
+- `register(username, email, password, namespace)` - Registers new user
+- `register_admin(username, email, password, admin_key, namespace)` - Registers administrator
 - `set_token(token)` - Sets token manually
 - `clear_token()` - Clears the token
 
@@ -198,11 +204,14 @@ async fn my_controller(
 
 - `get_current_user()` - Gets current authenticated user
 - `get_user(user_id)` - Gets user by ID
+- `base_url()` - The normalised base URL this client targets
 
 ### Groups
 
-- `has_group(user_id, group_id)` - Verifies if user belongs to group
-- `get_user_groups(user_id)` - Gets list of user groups
+- `current_user_has_group(group_name)` - Whether the current user is in the named group
+- `get_user_groups(user_id)` - Gets group names; pass `None::<&str>` for the current user
+- `has_group(user_id, group_id)` - **Deprecated.** The route it calls was removed
+  from the server; use `current_user_has_group` instead
 
 ### Password Management
 
@@ -226,6 +235,9 @@ async fn my_controller(
 - `ChangePasswordRequest` - Change password request data
 - `MessageResponse` - Generic message response
 - `PasswordResetResponse` - Admin password reset response (temporary password)
+- `GroupCheck` - Membership answer, read from either `has_group` or `has_access`
+- `GroupVerificationResponse` - Full group verification response
+- `DEFAULT_NAMESPACE` - The namespace used when a call is given `None`: `"public"`
 
 ## Error Handling
 
@@ -237,6 +249,14 @@ The library uses custom error types:
 - `KeyrunesError::GroupNotFoundError` - Group not found
 - `KeyrunesError::NetworkError` - Network error
 - `KeyrunesError::HttpError` - HTTP error
+- `KeyrunesError::SerializationError` - The response body was not what was expected
+- `KeyrunesError::InvalidUrl` - The base URL given to `KeyrunesClient::new` is not a URL
+- `KeyrunesError::InvalidToken` - A call needing a token was made without one
+- `KeyrunesError::Other` - Anything uncategorised
+
+A 404 is reported as `UserNotFoundError` or `GroupNotFoundError` when the
+server's own message names one, and as `Other` otherwise. Only the message
+decides: the request URL is appended for context and is not read.
 
 ## Examples
 
@@ -300,12 +320,13 @@ still costs nothing. If the full set is too slow for your loop, move the
 
 ## Requirements
 
-- Rust 1.70+
+- Rust 1.88+ — declared as `rust-version` in `Cargo.toml`, so cargo says so
+  rather than failing somewhere inside a dependency
 - Tokio runtime (for async functionality)
 
 ## License
 
-MIT OR Apache-2.0
+AGPL-3.0. The full text is in [LICENSE](LICENSE).
 
 ## Contributing
 
