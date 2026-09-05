@@ -2,9 +2,9 @@
 name = "keyrunes-rust-sdk"
 version = "0.2.0"
 edition = "2021"
-# The floor the CI verifies, on the full feature set. Declared so cargo says
-# so, instead of failing somewhere inside actix-http or time.
-rust-version = "1.88"
+# The toolchain this crate is built and tested against. Declared so cargo
+# reports it, instead of failing somewhere inside a dependency.
+rust-version = "1.98"
 authors = ["Jonatas Luiz de Oliveira <contact@jonatasoliveira.dev>"]
 description = "Rust SDK for Keyrunes authentication and authorization service"
 license = "AGPL-3.0"

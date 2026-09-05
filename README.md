@@ -320,7 +320,7 @@ still costs nothing. If the full set is too slow for your loop, move the
 
 ## Requirements
 
-- Rust 1.88+ — declared as `rust-version` in `Cargo.toml`, so cargo says so
+- Rust 1.98+ — declared as `rust-version` in `Cargo.toml`, so cargo says so
   rather than failing somewhere inside a dependency
 - Tokio runtime (for async functionality)
 
