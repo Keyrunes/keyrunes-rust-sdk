@@ -69,6 +69,7 @@ mockito = "1.2"
 dotenvy = "0.15"
 tower = "0.5"
 proptest = "1.11"
+exhaustive = "0.2.2"
 
 [features]
 default = []

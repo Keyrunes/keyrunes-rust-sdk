@@ -49,10 +49,12 @@ fn truncate_on_char_boundary(input: &str, max_bytes: usize) -> &str {
     if input.len() <= max_bytes {
         return input;
     }
-    let mut end = max_bytes;
-    while end > 0 && !input.is_char_boundary(end) {
-        end -= 1;
-    }
+    // Byte 0 is always a boundary, so the search always lands somewhere; the
+    // fallback is there to satisfy the type, not to handle a real case.
+    let end = (0..=max_bytes)
+        .rev()
+        .find(|&index| input.is_char_boundary(index))
+        .unwrap_or(0);
     &input[..end]
 }
 // New constants end here
@@ -808,54 +810,79 @@ impl KeyrunesClient {
         if status.is_success() {
             serde_json::from_str(&body).map_err(Into::into)
         } else {
-            Err(self.handle_error(status, &body, &url))
+            Err(classify_error(status, &body, &url))
         }
     }
+}
 
-    fn handle_error(
-        &self,
-        status: reqwest::StatusCode,
-        body: &str,
-        url: &url::Url,
-    ) -> KeyrunesError {
-        let error_message = if body.trim_start().starts_with('<') {
-            format!("HTTP {} - Received HTML response (endpoint may not exist or path is incorrect). Tried: {}", status.as_u16(), url)
-        } else {
-            let api_message = serde_json::from_str::<serde_json::Value>(body)
-                .map(|v| {
-                    v.get("message")
-                        .or_else(|| v.get("error"))
-                        .and_then(|m| m.as_str())
-                        .unwrap_or(body)
-                        .to_string()
-                })
-                .unwrap_or_else(|_| {
-                    if body.len() > ERROR_BODY_PREVIEW_BYTES {
-                        format!(
-                            "{}...",
-                            truncate_on_char_boundary(body, ERROR_BODY_PREVIEW_BYTES)
-                        )
-                    } else {
-                        body.to_string()
-                    }
-                });
-            format!("{} (URL: {})", api_message, url)
-        };
-
-        match status {
-            reqwest::StatusCode::UNAUTHORIZED => KeyrunesError::AuthenticationError(error_message),
-            reqwest::StatusCode::FORBIDDEN => KeyrunesError::AuthorizationError(error_message),
-            reqwest::StatusCode::NOT_FOUND => {
-                if error_message.contains("user") || error_message.contains("User") {
-                    KeyrunesError::UserNotFoundError(error_message)
-                } else if error_message.contains("group") || error_message.contains("Group") {
-                    KeyrunesError::GroupNotFoundError(error_message)
-                } else {
-                    KeyrunesError::Other(format!("Resource not found: {}", error_message))
-                }
+/// Extracts the human-readable detail an error body carries.
+///
+/// A JSON body is asked for `message`, then `error`; anything else — a plain
+/// sentence from a proxy, an empty body — is passed through, cut to
+/// [`ERROR_BODY_PREVIEW_BYTES`] so an upstream error page cannot end up whole
+/// inside an error value.
+fn error_detail(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .map(|v| {
+            v.get("message")
+                .or_else(|| v.get("error"))
+                .and_then(|m| m.as_str())
+                .unwrap_or(body)
+                .to_string()
+        })
+        .unwrap_or_else(|_| {
+            if body.len() > ERROR_BODY_PREVIEW_BYTES {
+                format!(
+                    "{}...",
+                    truncate_on_char_boundary(body, ERROR_BODY_PREVIEW_BYTES)
+                )
+            } else {
+                body.to_string()
             }
-            _ => KeyrunesError::HttpError(format!("HTTP {}: {}", status.as_u16(), error_message)),
+        })
+}
+
+/// Maps an unsuccessful response onto the error variant the caller sees.
+///
+/// A free function rather than a method: a `reqwest::Response` cannot be built
+/// with an arbitrary status and body from a test, so calling this directly is
+/// the only way to enumerate the classification.
+pub(crate) fn classify_error(
+    status: reqwest::StatusCode,
+    body: &str,
+    url: &url::Url,
+) -> KeyrunesError {
+    // An HTML body is a proxy or a router answering, not the API. Its content
+    // describes a web page, not the resource that was asked for, so nothing in
+    // it is allowed to reach the classification below.
+    let (detail, error_message) = if body.trim_start().starts_with('<') {
+        (
+            String::new(),
+            format!("HTTP {} - Received HTML response (endpoint may not exist or path is incorrect). Tried: {}", status.as_u16(), url),
+        )
+    } else {
+        let detail = error_detail(body);
+        let error_message = format!("{} (URL: {})", detail, url);
+        (detail, error_message)
+    };
+
+    match status {
+        reqwest::StatusCode::UNAUTHORIZED => KeyrunesError::AuthenticationError(error_message),
+        reqwest::StatusCode::FORBIDDEN => KeyrunesError::AuthorizationError(error_message),
+        reqwest::StatusCode::NOT_FOUND => {
+            // Only the server's own words decide which resource was missing.
+            // The URL is appended for the caller's benefit and must not steer
+            // the classification: `/api/user/change-password` answering 404
+            // means the route is absent, not that a user was not found.
+            if detail.contains("user") || detail.contains("User") {
+                KeyrunesError::UserNotFoundError(error_message)
+            } else if detail.contains("group") || detail.contains("Group") {
+                KeyrunesError::GroupNotFoundError(error_message)
+            } else {
+                KeyrunesError::Other(format!("Resource not found: {}", error_message))
+            }
         }
+        _ => KeyrunesError::HttpError(format!("HTTP {}: {}", status.as_u16(), error_message)),
     }
 }
 
@@ -913,5 +940,334 @@ mod tests {
         let truncated = truncate_on_char_boundary(&input, ERROR_BODY_PREVIEW_BYTES);
         assert_eq!(truncated.len(), 198);
         assert!(input.starts_with(truncated));
+    }
+}
+
+/// Exhaustive enumeration of the error-classification space.
+///
+/// `classify_error` decides which `KeyrunesError` variant a caller matches on,
+/// from three inputs that interact: the status, the shape of the body, and the
+/// words inside it. Sampled tests pick a few plausible bodies; the cases that
+/// actually break the classifier are the ones nobody thinks to write down — a
+/// body that is valid JSON but not an object, an HTML page whose text happens
+/// to say "user", a plain body sitting exactly on the preview limit. Every
+/// combination is walked instead.
+#[cfg(test)]
+mod exhaustive_error_classification {
+    use super::{classify_error, error_detail, ERROR_BODY_PREVIEW_BYTES};
+    use crate::error::KeyrunesError;
+    use exhaustive::{exhaustive_test, Exhaustive};
+    use reqwest::StatusCode;
+
+    /// A URL containing none of the words the 404 branch looks for, so the
+    /// classification can only come from the body.
+    const NEUTRAL_URL: &str = "https://keyrunes.example.com/api/thing";
+
+    fn neutral_url() -> url::Url {
+        url::Url::parse(NEUTRAL_URL).expect("the fixture URL must parse")
+    }
+
+    /// A status the API is capable of returning.
+    #[derive(Debug, Clone, Copy, PartialEq, Exhaustive)]
+    enum Status {
+        Unauthorized,
+        Forbidden,
+        NotFound,
+        BadRequest,
+        Conflict,
+        Unprocessable,
+        ServerError,
+    }
+
+    impl Status {
+        fn code(self) -> StatusCode {
+            match self {
+                Status::Unauthorized => StatusCode::UNAUTHORIZED,
+                Status::Forbidden => StatusCode::FORBIDDEN,
+                Status::NotFound => StatusCode::NOT_FOUND,
+                Status::BadRequest => StatusCode::BAD_REQUEST,
+                Status::Conflict => StatusCode::CONFLICT,
+                Status::Unprocessable => StatusCode::UNPROCESSABLE_ENTITY,
+                Status::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            }
+        }
+    }
+
+    /// What the error body says the missing resource was.
+    #[derive(Debug, Clone, Copy, PartialEq, Exhaustive)]
+    enum Subject {
+        /// Names neither a user nor a group.
+        Silent,
+        LowercaseUser,
+        CapitalisedUser,
+        LowercaseGroup,
+        CapitalisedGroup,
+        /// Names both; the user branch is tried first.
+        UserAndGroup,
+    }
+
+    impl Subject {
+        fn phrase(self) -> &'static str {
+            match self {
+                Subject::Silent => "nothing matched the request",
+                Subject::LowercaseUser => "user not found",
+                Subject::CapitalisedUser => "User not found",
+                Subject::LowercaseGroup => "group not found",
+                Subject::CapitalisedGroup => "Group not found",
+                Subject::UserAndGroup => "user is not in group",
+            }
+        }
+
+        fn names_a_user(self) -> bool {
+            matches!(
+                self,
+                Subject::LowercaseUser | Subject::CapitalisedUser | Subject::UserAndGroup
+            )
+        }
+
+        fn names_a_group(self) -> bool {
+            matches!(
+                self,
+                Subject::LowercaseGroup | Subject::CapitalisedGroup | Subject::UserAndGroup
+            )
+        }
+    }
+
+    /// The form an error body arrives in.
+    #[derive(Debug, Clone, Copy, PartialEq, Exhaustive)]
+    enum BodyShape {
+        Empty,
+        Html,
+        /// An HTML page behind leading whitespace, which `trim_start` removes.
+        HtmlAfterWhitespace,
+        JsonMessage,
+        JsonError,
+        /// Both keys present; `message` is the one that counts.
+        JsonMessageAndError,
+        /// A JSON object carrying neither key.
+        JsonWithoutEitherKey,
+        /// Valid JSON that is not an object, so `get` never finds anything.
+        JsonNotAnObject,
+        Plain,
+        /// Plain text of exactly [`ERROR_BODY_PREVIEW_BYTES`], the boundary
+        /// the preview rule turns on.
+        PlainExactlyAtLimit,
+        PlainOverLimit,
+        /// Over the limit, with a multi-byte character straddling the cut.
+        PlainOverLimitMultibyte,
+    }
+
+    impl BodyShape {
+        /// The subject phrase always leads, so truncation can never remove it
+        /// and the expected classification stays a property of the input.
+        fn body(self, subject: Subject) -> String {
+            let phrase = subject.phrase();
+            match self {
+                BodyShape::Empty => String::new(),
+                BodyShape::Html => format!("<html><body>{phrase}</body></html>"),
+                BodyShape::HtmlAfterWhitespace => format!("\n\t  <html>{phrase}</html>"),
+                BodyShape::JsonMessage => format!(r#"{{"message":"{phrase}"}}"#),
+                BodyShape::JsonError => format!(r#"{{"error":"{phrase}"}}"#),
+                BodyShape::JsonMessageAndError => {
+                    format!(r#"{{"message":"{phrase}","error":"secondary detail"}}"#)
+                }
+                BodyShape::JsonWithoutEitherKey => format!(r#"{{"detail":"{phrase}"}}"#),
+                BodyShape::JsonNotAnObject => format!(r#""{phrase}""#),
+                BodyShape::Plain => phrase.to_string(),
+                BodyShape::PlainExactlyAtLimit => {
+                    let mut body = phrase.to_string();
+                    while body.len() < ERROR_BODY_PREVIEW_BYTES {
+                        body.push('x');
+                    }
+                    body.truncate(ERROR_BODY_PREVIEW_BYTES);
+                    body
+                }
+                BodyShape::PlainOverLimit => {
+                    format!("{phrase} {}", "x".repeat(ERROR_BODY_PREVIEW_BYTES))
+                }
+                BodyShape::PlainOverLimitMultibyte => {
+                    format!("{phrase} {}", "€".repeat(ERROR_BODY_PREVIEW_BYTES))
+                }
+            }
+        }
+
+        /// Whether the subject phrase survives into the detail the 404 branch
+        /// reads. An empty body has nothing to say, and an HTML body is
+        /// discarded wholesale.
+        fn carries_the_subject(self) -> bool {
+            !matches!(
+                self,
+                BodyShape::Empty | BodyShape::Html | BodyShape::HtmlAfterWhitespace
+            )
+        }
+    }
+
+    /// The variant a caller would match on, as a name, so a failure says which
+    /// one was produced instead of `false`.
+    fn variant_name(error: &KeyrunesError) -> &'static str {
+        match error {
+            KeyrunesError::AuthenticationError(_) => "AuthenticationError",
+            KeyrunesError::AuthorizationError(_) => "AuthorizationError",
+            KeyrunesError::GroupNotFoundError(_) => "GroupNotFoundError",
+            KeyrunesError::UserNotFoundError(_) => "UserNotFoundError",
+            KeyrunesError::NetworkError(_) => "NetworkError",
+            KeyrunesError::SerializationError(_) => "SerializationError",
+            KeyrunesError::HttpError(_) => "HttpError",
+            KeyrunesError::InvalidUrl(_) => "InvalidUrl",
+            KeyrunesError::InvalidToken => "InvalidToken",
+            KeyrunesError::Other(_) => "Other",
+        }
+    }
+
+    /// 7 x 12 x 6 = 504 combinations.
+    ///
+    /// Outside 404 the status alone decides the variant: no body, however
+    /// shaped or worded, may redirect a 401 or a 500 somewhere else.
+    #[exhaustive_test]
+    fn the_status_alone_decides_every_variant_but_404(
+        status: Status,
+        shape: BodyShape,
+        subject: Subject,
+    ) {
+        if status == Status::NotFound {
+            return; // has a rule of its own, enumerated below
+        }
+
+        let body = shape.body(subject);
+        let error = classify_error(status.code(), &body, &neutral_url());
+
+        let expected = match status {
+            Status::Unauthorized => "AuthenticationError",
+            Status::Forbidden => "AuthorizationError",
+            _ => "HttpError",
+        };
+
+        assert_eq!(
+            variant_name(&error),
+            expected,
+            "{status:?} with {shape:?}/{subject:?}"
+        );
+    }
+
+    /// 12 x 6 = 72 combinations.
+    ///
+    /// A 404 is the one status whose variant depends on the body, and the rule
+    /// is: a user beats a group, and naming neither leaves the error generic.
+    #[exhaustive_test]
+    fn a_404_names_whichever_resource_the_body_named(shape: BodyShape, subject: Subject) {
+        let body = shape.body(subject);
+        let error = classify_error(StatusCode::NOT_FOUND, &body, &neutral_url());
+
+        let names_a_user = shape.carries_the_subject() && subject.names_a_user();
+        let names_a_group = shape.carries_the_subject() && subject.names_a_group();
+
+        let expected = if names_a_user {
+            "UserNotFoundError"
+        } else if names_a_group {
+            "GroupNotFoundError"
+        } else {
+            "Other"
+        };
+
+        assert_eq!(variant_name(&error), expected, "body {body:?}");
+    }
+
+    /// 7 x 12 x 6 = 504 combinations.
+    ///
+    /// Whatever went wrong, the caller is told which URL produced it — the one
+    /// piece of context a log line cannot reconstruct.
+    #[exhaustive_test]
+    fn the_url_always_reaches_the_caller(status: Status, shape: BodyShape, subject: Subject) {
+        let body = shape.body(subject);
+        let error = classify_error(status.code(), &body, &neutral_url());
+
+        assert!(
+            error.to_string().contains(NEUTRAL_URL),
+            "{status:?} with {shape:?}/{subject:?} hid the URL: {error}"
+        );
+    }
+
+    /// 12 x 6 = 72 combinations.
+    ///
+    /// A body that is not JSON is echoed to the caller, so it must be cut: an
+    /// upstream proxy can answer with a whole HTML page, and the preview is
+    /// what stops it from being carried around inside an error value.
+    #[exhaustive_test]
+    fn a_non_json_body_is_previewed_rather_than_echoed(shape: BodyShape, subject: Subject) {
+        let body = shape.body(subject);
+        if serde_json::from_str::<serde_json::Value>(&body).is_ok() {
+            return; // the JSON path has no length rule
+        }
+
+        let detail = error_detail(&body);
+
+        if body.len() <= ERROR_BODY_PREVIEW_BYTES {
+            assert_eq!(detail, body, "a body within the limit must pass through");
+        } else {
+            let preview = detail
+                .strip_suffix("...")
+                .unwrap_or_else(|| panic!("a cut body must be marked as cut, got {detail:?}"));
+            assert!(
+                preview.len() <= ERROR_BODY_PREVIEW_BYTES,
+                "preview of {} bytes exceeds the limit",
+                preview.len()
+            );
+            assert!(
+                body.starts_with(preview),
+                "the preview must be a prefix of the body"
+            );
+        }
+    }
+
+    /// 12 x 6 = 72 combinations.
+    ///
+    /// The classifier is handed bytes off the wire; no combination of them may
+    /// panic, which is how the UTF-8 truncation bug reached a release.
+    #[exhaustive_test]
+    fn no_body_shape_can_panic(shape: BodyShape, subject: Subject) {
+        let body = shape.body(subject);
+        for status in [
+            StatusCode::UNAUTHORIZED,
+            StatusCode::NOT_FOUND,
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ] {
+            let _ = classify_error(status, &body, &neutral_url());
+        }
+    }
+
+    /// `message` outranks `error` when a server sends both, even when they
+    /// disagree about what was missing.
+    #[test]
+    fn the_message_key_outranks_the_error_key() {
+        let body = r#"{"message":"group not found","error":"user not found"}"#;
+        let error = classify_error(StatusCode::NOT_FOUND, body, &neutral_url());
+        assert_eq!(variant_name(&error), "GroupNotFoundError");
+    }
+
+    /// The URL is shown to the caller but must not classify the failure: every
+    /// password endpoint this SDK calls sits under `/api/user/...`, and a
+    /// missing route there is not a missing user.
+    #[test]
+    fn the_url_does_not_decide_which_resource_was_missing() {
+        let url = url::Url::parse("https://keyrunes.example.com/api/user/change-password").unwrap();
+        let error = classify_error(StatusCode::NOT_FOUND, "", &url);
+        assert_eq!(variant_name(&error), "Other");
+    }
+
+    /// An HTML page is a proxy talking, not the API: its wording is not
+    /// evidence about the resource, however suggestive.
+    #[test]
+    fn html_wording_does_not_decide_which_resource_was_missing() {
+        let body = "<html><body>user not found</body></html>";
+        let error = classify_error(StatusCode::NOT_FOUND, body, &neutral_url());
+        assert_eq!(variant_name(&error), "Other");
+        assert!(error.to_string().contains("Received HTML response"));
+    }
+
+    /// The status code reaches the caller as a number, not only as a variant.
+    #[test]
+    fn an_unmapped_status_carries_its_code() {
+        let error = classify_error(StatusCode::IM_A_TEAPOT, "brewing", &neutral_url());
+        assert!(error.to_string().contains("418"), "{error}");
     }
 }
