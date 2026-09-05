@@ -1,0 +1,30 @@
+# cargo-audit configuration.
+#
+# The default posture is zero tolerance: `cargo audit` fails the build on any
+# advisory. Every entry below is a deliberate, argued exception, not a way to
+# quiet the tool.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0258 — "h2 unbounded empty DATA frames".
+    #
+    # Fixed in h2 >= 0.4.16, which this lockfile already pins for the 0.4
+    # line. The advisory still fires because two optional dependencies drag in
+    # the 0.3 line, which has no fixed release at all (0.3.27 is the last one
+    # ever published):
+    #
+    #   actix-web -> actix-http -> h2 0.3   (feature "actix")
+    #   rocket -> rocket_http -> hyper 0.14 -> h2 0.3   (feature "rocket")
+    #
+    # Neither is reachable from this SDK's own code. Both sit behind
+    # non-default features and exist only so the middleware modules can name
+    # the frameworks' request types; the vulnerability is in an HTTP/2 *server*
+    # accepting frames from a peer, and this crate is an HTTP client that never
+    # runs one. A consumer who enables the "actix" or "rocket" feature is
+    # already depending on that framework directly and resolves h2 through
+    # their own lockfile, not ours.
+    #
+    # Re-check when actix-http or rocket_http moves to h2 0.4; at that point
+    # this entry must be deleted rather than carried forward.
+    "RUSTSEC-2026-0258",
+]

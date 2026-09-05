@@ -1,8 +1,10 @@
-t# Rust
+# Rust
 /target/
 **/*.rs.bk
 *.pdb
-Cargo.lock
+
+# Cargo.lock is versioned: `cargo audit` scans it, so the set of versions
+# the CI checked has to be the set a contributor gets.
 
 # IDE
 .idea/
@@ -18,6 +20,8 @@ Thumbs.db
 # Test coverage
 tarpaulin-report.html
 coverage/
+lcov.info
+*.profraw
 
 # Documentation
 /target/doc/
