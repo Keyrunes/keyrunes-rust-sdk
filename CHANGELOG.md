@@ -7,7 +7,7 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
-## [unreleased]
+## [0.2.1] - 2026-10-13
 
 ### Bug Fixes
 
@@ -78,6 +78,8 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
   1.16.3 → 1.18.1 and `rustls-webpki` 0.103.13 → 0.103.15.
 
   Only the lockfile changes. `cargo audit` comes back clean and the 206 tests pass.
+
+- **deps**: quinn-proto 0.11.17 -> 0.11.19 (RUSTSEC-2026-0338/-0340/-0343)
 
 ### CI/CD
 
