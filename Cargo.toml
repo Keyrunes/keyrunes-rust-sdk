@@ -1,6 +1,6 @@
 [package]
 name = "keyrunes-rust-sdk"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 # The toolchain this crate is built and tested against. Declared so cargo
 # reports it, instead of failing somewhere inside a dependency.

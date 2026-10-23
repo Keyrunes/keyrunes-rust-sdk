@@ -7,6 +7,24 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
+## [0.2.2] - 2026-10-23
+
+### Miscellaneous Tasks
+
+- **deps**: bump rustls to 0.23.46 (RUSTSEC-2026-0346/0347/0348/0349)
+
+  Lockfile-only; transitive via quinn/tokio-rustls. Clears all four rustls
+  advisories. No version bump.
+
+- **deps**: upgrade all dependencies to their latest versions
+
+  Bump http 1.0->1.5, mockito 1.2->1.7, proptest 1.11->1.12 in Cargo.toml and
+  refresh the whole lockfile to the latest versions (now Rust 1.99-compatible).
+  No API changes required. fmt, clippy, cargo audit and 171 tests all pass.
+
+- **release**: bump version to 0.2.2
+
+
 ## [0.2.1] - 2026-10-13
 
 ### Bug Fixes
@@ -192,6 +210,14 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
   The GitHub jobs stay on `stable` rather than pinning 1.98, so a
   regression against a newer compiler shows up here instead of in a
   consumer's build. The floor is pinned; the ceiling floats.
+
+- **release**: 0.2.1
+
+  Security and hardening release. Fixes two dependency advisories (rustls
+  0.23.45, quinn-proto 0.11.19), declares the 1.98 MSRV, corrects the 404
+  error classification to use the server's own message, and adds the
+  exhaustive/property test suites and the audit wrapper. No public API
+  change; 0.2.0 code runs unchanged.
 
 ### Testing
 
