@@ -22,7 +22,6 @@ use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-// Constants
 const USER_AGENT: &str = "keyrunes-rust-sdk/0.2.0";
 const HEADER_ORG_KEY: &str = "X-Organization-Key";
 const ENV_ORG_KEY: &str = "KEYRUNES_ORG_KEY";
@@ -31,7 +30,6 @@ const ENDPOINT_LOGIN: &str = "/api/login";
 const ENDPOINT_REGISTER: &str = "/api/register";
 const ENDPOINT_ME: &str = "/api/me";
 
-// New constants start here
 const ENDPOINT_FORGOT_PASSWORD: &str = "/api/forgot-password";
 const ENDPOINT_RESET_PASSWORD: &str = "/api/reset-password";
 const ENDPOINT_CHANGE_PASSWORD: &str = "/api/user/change-password";
@@ -58,7 +56,6 @@ fn truncate_on_char_boundary(input: &str, max_bytes: usize) -> &str {
         .unwrap_or(0);
     &input[..end]
 }
-// New constants end here
 
 /// Client for interacting with the Keyrunes API
 ///
@@ -684,8 +681,6 @@ impl KeyrunesClient {
         *self.token.write().await = None;
     }
 
-    // New methods start here
-
     /// Requests a password reset email.
     ///
     /// # Arguments
@@ -909,7 +904,6 @@ impl KeyrunesClient {
             .await?;
         self.handle_response::<MessageResponse>(response).await
     }
-    // New methods end here
 
     async fn handle_response<T: for<'de> serde::Deserialize<'de>>(
         &self,

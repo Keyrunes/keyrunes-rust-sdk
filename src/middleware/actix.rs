@@ -26,7 +26,11 @@ impl KeyrunesState {
     }
 }
 
-/// Authenticated user data stored in the request
+/// Authenticated user data stored in the request.
+///
+/// Resolved against `/api/me` with the request's own token; the shared
+/// client's stored token is never mutated, so concurrent requests cannot
+/// overwrite each other's identity mid-flight.
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
     pub user: User,
@@ -93,9 +97,6 @@ where
                 if let Ok(auth_str) = auth_header.to_str() {
                     if let Some(token) = auth_str.strip_prefix("Bearer ") {
                         if let Some(state) = req.app_data::<actix_web::web::Data<KeyrunesState>>() {
-                            // Per-request lookup: never mutate the shared
-                            // client token, or concurrent requests overwrite
-                            // each other's identity mid-flight.
                             if let Ok(user) = state.client.get_current_user_with_token(token).await
                             {
                                 req.extensions_mut().insert(AuthenticatedUser { user });
@@ -117,8 +118,6 @@ pub async fn require_group(
 ) -> Result<AuthenticatedUser, actix_web::Error> {
     let user = AuthenticatedUser::from_request(req, &mut actix_web::dev::Payload::None).await?;
 
-    // Groups were just verified against the server through /api/me; the old
-    // has_group call targeted a route current servers removed (always 404).
     if !user.user.groups.iter().any(|g| g == group_id) {
         return Err(actix_web::error::ErrorForbidden(format!(
             "User does not belong to group: {}",

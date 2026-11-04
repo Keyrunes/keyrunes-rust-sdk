@@ -21,7 +21,11 @@ impl KeyrunesState {
     }
 }
 
-/// Guard that gets the current authenticated user
+/// Guard that gets the current authenticated user.
+///
+/// Resolves against `/api/me` with the request's own token: storing it on the
+/// shared client (`set_token`) would let a concurrent request read another
+/// user's identity.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
     pub user: User,
@@ -62,9 +66,6 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
             }
         };
 
-        // Resolve the caller against /api/me with the request's own token:
-        // storing it on the shared client (set_token) would let a concurrent
-        // request read another user's identity.
         match state.client.get_current_user_with_token(token).await {
             Ok(user) => Outcome::Success(AuthenticatedUser { user }),
             Err(e) => Outcome::Error((rocket::http::Status::Unauthorized, e)),
@@ -72,7 +73,11 @@ impl<'r> FromRequest<'r> for AuthenticatedUser {
     }
 }
 
-/// Guard that verifies if the user belongs to a specific group
+/// Guard that verifies if the user belongs to a specific group.
+///
+/// The guard already fetched `/api/me` server-side, so `user.groups` is the
+/// authoritative membership list; the old `has_group` route was removed and
+/// always answered 404.
 #[derive(Debug, Clone)]
 pub struct RequireGroup {
     pub user: User,
@@ -105,10 +110,6 @@ impl<'r> FromRequest<'r> for RequireGroup {
             }
         };
 
-        // The guard already fetched /api/me server-side; `user.groups` is the
-        // authoritative membership list. The old has_group call hit
-        // GET /api/users/{uid}/groups/{gid}, a route the server no longer
-        // exposes — every check answered 404 and was reported as a failure.
         if authenticated_user
             .user
             .groups
@@ -131,7 +132,11 @@ impl<'r> FromRequest<'r> for RequireGroup {
     }
 }
 
-/// Guard that verifies if the user is an administrator
+/// Guard that verifies if the user is an administrator.
+///
+/// Answers from the server-verified group names ("admin", "admins",
+/// "superadmin"): "admins" alone was wrong — the server's admin group is
+/// "admin", and global owners carry "superadmin".
 #[derive(Debug, Clone)]
 pub struct RequireAdmin {
     pub user: User,
@@ -153,9 +158,6 @@ impl<'r> FromRequest<'r> for RequireAdmin {
             }
         };
 
-        // Same reasoning as RequireGroup: answer from the server-verified
-        // group names. "admins" alone was wrong — the server's admin group is
-        // "admin", and global owners carry "superadmin".
         let is_admin = authenticated_user
             .user
             .groups
