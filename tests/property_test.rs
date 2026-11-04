@@ -263,6 +263,7 @@ proptest! {
     ) {
         let registration = UserRegistration {
             username, email, password, namespace: namespace.clone(),
+            ..Default::default()
         };
         let value: serde_json::Value = serde_json::to_value(&registration).unwrap();
         prop_assert_eq!(value.get("namespace").and_then(|v| v.as_str()), Some(namespace.as_str()));

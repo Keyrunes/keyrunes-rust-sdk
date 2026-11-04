@@ -86,7 +86,7 @@ async fn test_register_payload_defaults_namespace_to_public_when_none() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await;
 
     // #assert
@@ -109,7 +109,7 @@ async fn test_register_parses_flat_user_response() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await;
 
     // #assert
@@ -138,7 +138,7 @@ async fn test_register_malformed_response_returns_clear_parse_error() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await;
 
     // #assert

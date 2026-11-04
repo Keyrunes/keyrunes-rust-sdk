@@ -20,6 +20,7 @@ fn create_mock_user(username: &str, groups: Vec<&str>) -> AuthenticatedUser {
             groups: groups.into_iter().map(|g| g.to_string()).collect(),
             created_at: Some(now),
             updated_at: Some(now),
+            ..Default::default()
         },
     }
 }

@@ -78,7 +78,7 @@ async fn test_register_success() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await;
 
     // #assert
@@ -106,7 +106,7 @@ async fn test_register_failure() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await;
 
     // #assert
@@ -139,7 +139,7 @@ async fn test_register_and_login_flow() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let user = client
-        .register("john", "john@example.com", "password123", None)
+        .register("john", "john@example.com", "password123", None, None)
         .await
         .unwrap();
     let token = client
@@ -884,7 +884,13 @@ async fn test_register_response_parsing() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("parseduser", "parsed@example.com", "password123", None)
+        .register(
+            "parseduser",
+            "parsed@example.com",
+            "password123",
+            None,
+            None,
+        )
         .await;
 
     // #assert
