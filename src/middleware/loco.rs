@@ -37,24 +37,29 @@ pub fn extract_token_from_headers(
 }
 
 /// Helper to get authenticated user from a token
+///
+/// Resolves against `/api/me` with the supplied token without storing it on
+/// the client: the client is shared across requests, and `set_token` from one
+/// request could make another request answer with the wrong identity.
 pub async fn get_user_from_token(
     client: &KeyrunesClient,
     token: &str,
 ) -> Result<AuthenticatedUser, KeyrunesError> {
-    client.set_token(token.to_string()).await;
-    let user = client.get_current_user().await?;
+    let user = client.get_current_user_with_token(token).await?;
     Ok(AuthenticatedUser { user })
 }
 
 /// Helper to verify if the user belongs to a group
-#[allow(deprecated)]
+///
+/// Checks the server-verified group names carried by `user`. The old
+/// `has_group` call hit `GET /api/users/{uid}/groups/{gid}`, a route the
+/// server no longer exposes.
 pub async fn require_group(
-    client: &KeyrunesClient,
+    _client: &KeyrunesClient,
     user: &AuthenticatedUser,
     group_id: &str,
 ) -> Result<(), KeyrunesError> {
-    let has_group = client.has_group(&user.user.id, group_id).await?;
-    if !has_group {
+    if !user.user.groups.iter().any(|g| g == group_id) {
         return Err(KeyrunesError::AuthorizationError(format!(
             "User does not belong to group: {}",
             group_id
@@ -64,9 +69,23 @@ pub async fn require_group(
 }
 
 /// Helper to verify if the user is an administrator
+///
+/// The server's admin group is "admin"; global owners carry "superadmin";
+/// "admins" is kept for legacy fixtures.
 pub async fn require_admin(
     client: &KeyrunesClient,
     user: &AuthenticatedUser,
 ) -> Result<(), KeyrunesError> {
-    require_group(client, user, "admins").await
+    let is_admin = user
+        .user
+        .groups
+        .iter()
+        .any(|g| matches!(g.as_str(), "admin" | "admins" | "superadmin"));
+    if !is_admin {
+        return Err(KeyrunesError::AuthorizationError(
+            "Access denied: administrator privileges required".to_string(),
+        ));
+    }
+    let _ = client;
+    Ok(())
 }

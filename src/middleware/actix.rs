@@ -93,8 +93,11 @@ where
                 if let Ok(auth_str) = auth_header.to_str() {
                     if let Some(token) = auth_str.strip_prefix("Bearer ") {
                         if let Some(state) = req.app_data::<actix_web::web::Data<KeyrunesState>>() {
-                            state.client.set_token(token.to_string()).await;
-                            if let Ok(user) = state.client.get_current_user().await {
+                            // Per-request lookup: never mutate the shared
+                            // client token, or concurrent requests overwrite
+                            // each other's identity mid-flight.
+                            if let Ok(user) = state.client.get_current_user_with_token(token).await
+                            {
                                 req.extensions_mut().insert(AuthenticatedUser { user });
                             }
                         }
@@ -114,20 +117,13 @@ pub async fn require_group(
 ) -> Result<AuthenticatedUser, actix_web::Error> {
     let user = AuthenticatedUser::from_request(req, &mut actix_web::dev::Payload::None).await?;
 
-    if let Some(state) = req.app_data::<actix_web::web::Data<KeyrunesState>>() {
-        #[allow(deprecated)]
-        let has_group = state
-            .client
-            .has_group(&user.user.id, group_id)
-            .await
-            .map_err(|e| actix_web::error::ErrorForbidden(e.to_string()))?;
-
-        if !has_group {
-            return Err(actix_web::error::ErrorForbidden(format!(
-                "User does not belong to group: {}",
-                group_id
-            )));
-        }
+    // Groups were just verified against the server through /api/me; the old
+    // has_group call targeted a route current servers removed (always 404).
+    if !user.user.groups.iter().any(|g| g == group_id) {
+        return Err(actix_web::error::ErrorForbidden(format!(
+            "User does not belong to group: {}",
+            group_id
+        )));
     }
 
     Ok(user)
@@ -137,5 +133,18 @@ pub async fn require_group(
 pub async fn require_admin(
     req: &actix_web::HttpRequest,
 ) -> Result<AuthenticatedUser, actix_web::Error> {
-    require_group(req, "admins").await
+    let user = AuthenticatedUser::from_request(req, &mut actix_web::dev::Payload::None).await?;
+
+    if !user
+        .user
+        .groups
+        .iter()
+        .any(|g| matches!(g.as_str(), "admin" | "admins" | "superadmin"))
+    {
+        return Err(actix_web::error::ErrorForbidden(
+            "Access denied: administrator privileges required",
+        ));
+    }
+
+    Ok(user)
 }
