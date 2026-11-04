@@ -437,7 +437,7 @@ impl KeyrunesClient {
     /// are created by an existing admin through `POST /api/admin/user` or
     /// by the server CLI. Kept for API compatibility only.
     #[deprecated(
-        since = "0.2.3",
+        since = "0.3.0",
         note = "server >= 0.4.2 ignores admin_key at /api/register and never promotes; create admins via /api/admin/user or the CLI"
     )]
     /// # Arguments
@@ -565,7 +565,10 @@ impl KeyrunesClient {
     /// - `Ok(false)` if user doesn't belong to the group
     /// - `Err(KeyrunesError::GroupNotFoundError)` if group doesn't exist
     /// - `Err(KeyrunesError::AuthenticationError)` if not authenticated
-    #[deprecated(note = "rota removida no servidor")]
+    #[deprecated(
+        since = "0.3.0",
+        note = "the server removed this route; read the group names from the `groups` field returned by `get_current_user` instead"
+    )]
     pub async fn has_group<U: Into<String>, G: Into<String>>(
         &self,
         user_id: U,
