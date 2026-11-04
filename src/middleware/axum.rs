@@ -25,7 +25,11 @@ impl KeyrunesState {
     }
 }
 
-/// Extractor that gets the current authenticated user
+/// Extractor that gets the current authenticated user.
+///
+/// Resolves against `/api/me` with the request's own token and never stores
+/// it on the shared client, so concurrent requests cannot overwrite each
+/// other's identity mid-flight.
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
     pub user: User,
@@ -50,9 +54,6 @@ impl FromRequestParts<KeyrunesState> for AuthenticatedUser {
 
         let keyrunes_state = state;
 
-        // Per-request token lookup: the shared client state is never
-        // mutated, so concurrent requests cannot overwrite each other's
-        // identity mid-flight.
         let user = keyrunes_state
             .client
             .get_current_user_with_token(token)
@@ -63,7 +64,11 @@ impl FromRequestParts<KeyrunesState> for AuthenticatedUser {
     }
 }
 
-/// Extractor to verify if the user belongs to a specific group
+/// Extractor to verify if the user belongs to a specific group.
+///
+/// Checks the server-verified `groups` names fetched through `/api/me`; the
+/// old `has_group` call targeted `GET /api/users/{uid}/groups/{gid}`, a route
+/// current servers removed (it always answered 404).
 #[derive(Clone, Debug)]
 pub struct RequireGroup {
     pub user: User,
@@ -88,9 +93,6 @@ impl FromRequestParts<KeyrunesState> for RequireGroup {
             .get("group_id")
             .ok_or(KeyrunesRejection::MissingGroup)?;
 
-        // The user's groups were just fetched from the server via /api/me;
-        // checking them locally is both correct and avoids the removed
-        // GET /api/users/{uid}/groups/{gid} route (deprecated has_group).
         if !authenticated_user.user.groups.iter().any(|g| g == group_id) {
             return Err(KeyrunesRejection::Forbidden(format!(
                 "User does not belong to group: {}",
@@ -105,7 +107,11 @@ impl FromRequestParts<KeyrunesState> for RequireGroup {
     }
 }
 
-/// Extractor to verify if the user is an administrator
+/// Extractor to verify if the user is an administrator.
+///
+/// Requires exact membership in the server's privileged group names
+/// (`admin`, `admins`, `superadmin`); the old check ("admins" only, via the
+/// removed `has_group` route) denied real admins and hit a 404.
 #[derive(Clone, Debug)]
 pub struct RequireAdmin {
     pub user: User,
@@ -120,9 +126,6 @@ impl FromRequestParts<KeyrunesState> for RequireAdmin {
     ) -> Result<Self, Self::Rejection> {
         let authenticated_user = AuthenticatedUser::from_request_parts(parts, state).await?;
 
-        // Exact membership in the server's privileged group names. The old
-        // check ("admins" only, via the removed has_group route) denied real
-        // admins and hit a 404.
         if !authenticated_user
             .user
             .groups
