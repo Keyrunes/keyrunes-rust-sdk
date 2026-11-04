@@ -9,6 +9,10 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 
 ## [0.4.0] - 2026-11-04
 
+### Documentation
+
+- **changelog**: cut the 0.4.0 release section with git-cliff
+
 ### Features
 
 - [**breaking**] allow pinning the group on register and expose the namespace
@@ -28,6 +32,446 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
   tenant it had actually authenticated against - the exact check needed
   after the namespace/organization_id confusion was fixed server-side.
   User and UserResponse now carry `namespace` and `organization_id`.
+
+
+## [0.3.0] - 2026-11-04
+
+### Bug Fixes
+
+- **security**: make middleware authorization local, race-free and route-accurate (reported by Rathnadeepan / HotWater @HotWater-015)
+
+  The framework guards (axum, actix, rocket, loco) authenticated by
+  writing the caller's token into the shared Arc<KeyrunesClient> and
+  then reading the current user back: under concurrent requests one
+  request's token overwrote another's identity mid-flight. Added
+  KeyrunesClient::get_current_user_with_token, which sends the passed
+  token without touching the stored one, and all four guards use it.
+
+  The guards' group checks called the deprecated has_group, which hits
+  GET /api/users/{uid}/groups/{gid} - a route the server no longer has,
+  so every check failed with 404. They now read the group NAMES off the
+  user /api/me already returned, and RequireAdmin accepts the exact set
+  {admin, admins, superadmin} instead of only the old 'admins' literal.
+
+### Documentation
+
+- move middleware rationale notes into item rustdoc
+
+  Fold the per-request token race and the removed has_group route
+  explanations into the /// docs of the guards they belong to (loco.rs
+  already documented them that way) and drop the leftover section-marker
+  comments in client.rs. No behavior change: fmt, strict clippy and the
+  full --all-features suite pass.
+
+- **changelog**: cut the 0.3.0 release section with git-cliff
+
+### Miscellaneous Tasks
+
+- **release**: bump version to 0.3.0
+
+  The release adds public API (get_current_user_with_token, refresh_token)
+  and deprecates register_admin and has_group, so the minor version is the
+  semantically correct bump. The deprecation notes are aligned with the new
+  version number and translated to English.
+
+
+## [0.2.2] - 2026-10-23
+
+### Miscellaneous Tasks
+
+- **deps**: bump rustls to 0.23.46 (RUSTSEC-2026-0346/0347/0348/0349)
+
+  Lockfile-only; transitive via quinn/tokio-rustls. Clears all four rustls
+  advisories. No version bump.
+
+- **deps**: upgrade all dependencies to their latest versions
+
+  Bump http 1.0->1.5, mockito 1.2->1.7, proptest 1.11->1.12 in Cargo.toml and
+  refresh the whole lockfile to the latest versions (now Rust 1.99-compatible).
+  No API changes required. fmt, clippy, cargo audit and 171 tests all pass.
+
+- **release**: bump version to 0.2.2
+
+
+## [0.2.1] - 2026-10-13
+
+### Bug Fixes
+
+- **deps**: clear the audit failures and pin the one exception
+
+  `cargo audit` was failing the pipeline on three advisories:
+
+    RUSTSEC-2026-0258  h2 0.4.13   unbounded empty DATA frames
+    RUSTSEC-2026-0258  h2 0.3.27   the same, on the older line
+    RUSTSEC-2026-0185  quinn-proto memory exhaustion from out-of-order
+                                   stream reassembly (7.5 high)
+
+  plus warnings for an unsound `anyhow` and two yanked crates. Updating
+  the lockfile settles everything but the h2 0.3 line, which has no fixed
+  release: 0.3.27 is the last version ever published, and it arrives
+  through actix-http and through rocket_http -> hyper 0.14. Both sit
+  behind non-default features, and the vulnerability is in an HTTP/2
+  server accepting frames from a peer, which this crate never is.
+
+  That one advisory is therefore ignored in `.cargo/audit.toml`, with the
+  argument written down next to it. cargo-audit ignores by advisory ID and
+  cannot be told "only for 0.3", so the same entry would equally hide a
+  regression on the 0.4 line. `scripts/audit.sh` closes that gap by
+  failing when the lockfile's h2 0.4 drops below 0.4.16, keeping the
+  exception as narrow as it was argued to be.
+
+  Cargo.lock is also no longer listed in .gitignore. It was tracked
+  anyway, and it has to be: it is what `cargo audit` reads.
+
+- **client**: classify a 404 by what the server said, not by the URL
+
+  `handle_error` built the caller-facing message by appending the request
+  URL to the server's own, then searched that combined string for "user"
+  and "group" to decide between `UserNotFoundError`, `GroupNotFoundError`
+  and `Other`. The URL is not evidence. Every password endpoint this SDK
+  calls sits under `/api/user/...`, so a server that has not deployed
+  `/api/user/change-password` yet answered with `UserNotFoundError` — a
+  missing route reported as a missing user.
+
+  Only the server's own words decide now. The messages themselves are
+  unchanged, so nothing a caller prints or logs moves.
+
+  The classification is a free `classify_error` rather than a method,
+  because a `reqwest::Response` cannot be built with an arbitrary status
+  and body from a test, and enumerating it is the whole point of the suite
+  that comes with it: seven statuses x twelve body shapes x six wordings,
+  walked in full. The cases that break a classifier are the ones nobody
+  writes down by hand — valid JSON that is not an object, an HTML error
+  page whose text happens to say "user", a body sitting exactly on the
+  preview limit.
+
+  `truncate_on_char_boundary` now searches for the boundary instead of
+  walking back to it. The loop was correct, but it had an infinite-loop
+  failure mode one edit away, which mutation testing found by hanging on
+  it; a search cannot fail that way.
+
+- **deps**: rustls 0.23.39 → 0.23.45 (RUSTSEC-2026-0285)
+
+  `cargo audit` reported a vulnerability: TLS 1.3 handshake messages accepted
+  across encryption level boundaries, severity 5.3, fixed in 0.23.45. It is the
+  same advisory that turned up in the server, and it arrives here through
+  `reqwest`.
+
+  One detail that costs time if you miss it: `cargo update -p rustls` on its own
+  stops at **0.23.43** and the audit keeps failing — going past that needs
+  `aws-lc-sys` 0.40 → 0.45, which is a semver break in a 0.x crate and cargo will
+  not do it unasked. It took `--precise 0.23.45`, which also carried `aws-lc-rs`
+  1.16.3 → 1.18.1 and `rustls-webpki` 0.103.13 → 0.103.15.
+
+  Only the lockfile changes. `cargo audit` comes back clean and the 206 tests pass.
+
+- **deps**: quinn-proto 0.11.17 -> 0.11.19 (RUSTSEC-2026-0338/-0340/-0343)
+
+### CI/CD
+
+- gate every pipeline on mutation testing
+
+  Coverage says a line ran. It says nothing about whether an assertion
+  would have complained had that line done the wrong thing — which is why
+  this crate could sit at 96% line coverage while its actix authorization
+  guard could be inverted without a single test failing.
+
+  cargo-mutants rewrites one expression at a time and reruns the suite; a
+  surviving mutant is a line no assertion constrains. It now runs in both
+  pipelines and as a pre-commit hook, in two scopes, because the framework
+  middleware compiles only with its feature enabled and pulls the whole
+  framework in with it. The gate is all-or-nothing: there is no allowance
+  in `.cargo/mutants.toml` for known survivors, because there are none.
+
+  `mutagen` is the better-known name for this in Rust but is unmaintained
+  and nightly-only; cargo-mutants is its de-facto successor and runs on
+  stable.
+
+  Two further things the wiring turned up:
+
+  The coverage gate never worked. It scraped a percentage with
+  `grep -oP 'Total.*\K\d+\.\d+'`, and llvm-cov prints `TOTAL`, so the
+  match always failed and the `|| echo "0"` fallback took the job below
+  its own threshold. `scripts/coverage-check.sh` reads the LF/LH records
+  out of the LCOV file instead, which are line counts by definition rather
+  than a column whose position moves between llvm-cov versions.
+
+  `actions-rs/toolchain` is archived, and the run log warns that the
+  `set-output` command it uses "will be disabled soon". Replaced with
+  `dtolnay/rust-toolchain`, which also clears the Node 20 deprecation
+  warnings. The Woodpecker image moves off rust:1.75, which no longer
+  builds this dependency tree.
+
+  The three configurations now enforce the same gates, so a green commit
+  stays green in either pipeline.
+
+### Documentation
+
+- **readme**: correct the licence, the MSRV and every wrong signature
+
+  The README had drifted far enough that following it did not compile.
+
+  `login` lost its namespace argument somewhere and was documented as
+  taking two; `register` and `register_admin` likewise. `get_user_groups`
+  was shown as `None`, which cannot infer its own type parameter. The Axum
+  example built a `Router` nothing ever consumed, so the state type had
+  nothing to be inferred from — it is now the same shape as
+  `examples/axum_example.rs`, which does compile. Each snippet was
+  extracted and built to check this rather than read.
+
+  `has_group` is marked deprecated, as it is in the source: the route it
+  calls no longer exists on the server. `current_user_has_group`, which
+  replaces it, was not documented at all, nor were `base_url`, three data
+  models, or four of the ten error variants.
+
+  The licence was listed as MIT OR Apache-2.0. The LICENSE file and
+  Cargo.toml both say AGPL-3.0, and they are the ones that count.
+
+  "Rust 1.70+" was off by eighteen releases: actix-http and time both
+  require 1.88. That is now declared as `rust-version` in Cargo.toml, so
+  cargo reports it instead of failing somewhere inside a dependency, and a
+  CI job reads the number back out of the manifest and builds against it.
+  The claim rotted because nothing checked it; now something does.
+
+- **changelog**: carry the commit body, and drop nothing in silence
+
+  Three things were wrong with the generated changelog, and the first is why you
+  would notice the other two:
+
+  **The entries repeated their own prefix.** `- Fix(deps): clear the audit
+  failures` under a `### Bug Fixes` heading. Cause: `conventional_commits = false`,
+  so git-cliff never parsed `fix(deps):` out of the subject — the scope was empty
+  and the prefix stayed in the text. Now it is on, and an entry reads
+  `- **deps**: clear the audit failures`, the same shape the other two Keyrunes
+  repositories use.
+
+  **The file was stale.** It had been generated at v0.2.0 and the seven commits
+  since — including the `rustls` advisory fix — were not in it. Regenerating is
+  the whole point of a generated file; nobody had run it.
+
+  **One commit was being dropped without a trace.** `filter_unconventional = true`
+  with no catch-all parser silently discards anything that follows no convention —
+  here, "Initial commit". A changelog that looks complete while omitting work is
+  the failure mode worth guarding against, so the filter is off and a `.*` rule
+  sends the leftovers to `Other`.
+
+  The template now carries the **commit body**, not just the subject: the "what"
+  survives either way, the "why" is what nobody reconstructs later. 325 lines to
+  351, and every release from 0.1.0 on is represented.
+
+  One `commit_preprocessors` rule also goes: it stripped an assistant session
+  trailer that no commit carries any more. Dead configuration that still named the
+  tool in a tracked file.
+
+### Miscellaneous Tasks
+
+- declare 1.98 as the crate's Rust version
+
+  Raises `rust-version` from the dependency-derived floor of 1.88 to the
+  toolchain the project actually builds against — the same 1.98 the
+  Woodpecker image pins and the same one GitHub's `stable` currently
+  resolves to.
+
+  Verified with `cargo +1.98 check --all-features --all-targets`. The MSRV
+  job needs no change: it reads the number out of the manifest.
+
+  The GitHub jobs stay on `stable` rather than pinning 1.98, so a
+  regression against a newer compiler shows up here instead of in a
+  consumer's build. The floor is pinned; the ceiling floats.
+
+- **release**: 0.2.1
+
+  Security and hardening release. Fixes two dependency advisories (rustls
+  0.23.45, quinn-proto 0.11.19), declares the 1.98 MSRV, corrects the 404
+  error classification to use the server's own message, and adds the
+  exhaustive/property test suites and the audit wrapper. No public API
+  change; 0.2.0 code runs unchanged.
+
+### Testing
+
+- enumerate the parsing rules and cover the group guards
+
+  Two kinds of gap, both found by mutating the code and seeing what the
+  suite failed to notice.
+
+  The models were sampled, not enumerated. `tests/exhaustive_test.rs`
+  walks the spaces in full: every combination of the three ID fields a
+  Keyrunes response may carry (4 x 4 x 5), both token formats against
+  every arrangement of their optional fields (4 x 3^4), the namespace
+  default across all three payloads, and every way a base URL may be
+  typed (2 x 2 x 3 x 4). That reaches the inputs a hand-written test skips
+  — a field present but `null`, an ID that is the empty string, a legacy
+  token response carrying an `expires_at` it has nowhere to put.
+
+  The framework guards were worse: deleting the `!` from actix's
+  `require_group`, so that members are refused and non-members admitted,
+  did not fail a single test. Neither did deleting the arm that reads
+  `group_id` out of rocket's query string. Both authorization paths are
+  now driven end to end, in both directions, and rocket's guard is
+  exercised through a real local client rather than through a `Clone` impl.
+
+
+## [0.2.0] - 2026-09-03
+
+### Bug Fixes
+
+- **sdk**: match server auth contract — namespace in payloads, flat register response, group-by-name check (0.1.2)
+
+### Features
+
+- **tests**: add property-based and fuzz suites; fix UTF-8 truncation panic
+
+  Add two new test suites and the tooling to measure them:
+
+  - tests/property_test.rs (22 tests): proptest invariants over base URL
+    normalization and idempotence, schemeless URL rejection, panic-free
+    client construction, User id precedence, Token new-vs-legacy parsing,
+    namespace serialization, GroupCheck field aliases, and error Display
+    and From conversions.
+  - tests/fuzz_test.rs (13 tests): arbitrary JSON fed to every model to prove
+    deserialization never panics, plus mockito transport cases covering
+    oversized, multibyte, HTML and empty error bodies.
+
+  Fix the panic the fuzz suite found: handle_error sliced the error body at a
+  fixed 200-byte index, which panics when that index lands inside a multi-byte
+  character (for example 198 ASCII bytes followed by a 3-byte character).
+  Truncation now walks left to the nearest UTF-8 boundary via
+  truncate_on_char_boundary.
+
+  Also add KeyrunesClient::base_url(), since integration tests are separate
+  crates and could not otherwise observe the normalized URL.
+
+  .cargo/mutants.toml configures cargo-mutants. Of 33 viable mutants, 31 are
+  caught and 1 is killed by timeout; the single survivor is equivalent
+  (`end >= 0` on a usize is always true, and is_char_boundary(0) is always
+  true, so the loop terminates identically).
+
+### Miscellaneous Tasks
+
+- **changelog**: generate 0.2.0 release notes
+
+  Also teach cliff.toml to strip commit trailers, which are metadata rather
+  than release notes.
+
+
+## [0.1.2] - 2026-07-12
+
+### Features
+
+- update libs for audit problems
+
+### Miscellaneous Tasks
+
+- Release keyrunes-rust-sdk version 0.1.1
+
+- Update Changelog
+
+
+## [0.1.1] - 2026-04-28
+
+### Bug Fixes
+
+- **ci**: resolve fmt failures and add daily scheduled CI run
+
+  - Run cargo fmt to fix formatting violations in 8 files
+  - Add schedule trigger for daily CI at midnight UTC (cron: '0 0 * * *')
+  - All 120 tests pass, clippy clean
+
+- **test**: gate middleware module with loco feature
+
+  Add feature='loco' to middleware module gate so that
+  tests/loco_test.rs can import middleware::loco::* when
+  running with --features loco (or loco alone).
+
+- **ci**: resolve fmt and loco_test compilation errors
+
+  - Run cargo fmt to expand long cfg line in src/lib.rs
+  - Add #![cfg(...)] gate to tests/loco_test.rs so it only
+    compiles when a framework feature (axum/actix/rocket) is enabled
+
+### Build System
+
+- build: Update CHANGELOG
+- Add updates in changelog
+- fix build CI errors
+
+### Features
+
+- **models**: add password management model structs
+
+- add password management API endpoints
+
+  - Add 5 client methods: forgot_password, reset_password, change_password, admin_reset_user_password, admin_send_password_reset
+  - Add 3 ENDPOINT constants for password endpoints
+  - Add 11 client tests + 3 model tests
+  - All 48 tests pass
+
+### Miscellaneous Tasks
+
+- add changelog
+
+- update lib version in Cargo
+
+- add crates.io url lib in README
+
+- **deps**: update all dependencies to latest stable versions
+
+  - Remove ghost deps: jsonwebtoken, wiremock (unused)
+  - Replace deprecated dotenv with dotenvy
+  - Update reqwest 0.11 → 0.13 (fix reqwest::Url → url::Url)
+  - Update thiserror 1.0 → 2.0 (backward-compatible, no code changes)
+  - Update axum 0.7 → 0.8 (remove async_trait, use native axum 0.8 API)
+
+  All tests pass, all features compile, clippy clean.
+
+- chore: Up[date CHANGELOG
+-  Add updates in changelog
+- Remove convencional commits for true in this moment
+
+### Testing
+
+- achieve 100% coverage, add password management example, update README
+
+  - Add tests for handle_error branches (HTML, long body, group NOT_FOUND, fallback)
+  - Add tests for KeyrunesClient::new org key env var injection
+  - Add tests for admin password methods with no token
+  - Add tests for From<reqwest::Error>, From<serde_json::Error>, From<url::ParseError>
+  - Add tests for TokenResponse::LegacyFormat (access_token) deserialization
+  - Add tests for UserResponse ID resolution (external_id, numeric, unknown fallback)
+  - Add tests for axum middleware extractors (AuthenticatedUser, RequireGroup, RequireAdmin)
+  - Add tests for actix middleware (AuthMiddleware, require_group, require_admin)
+  - Add tests for loco middleware (extract_token, get_user_from_token, require_group, require_admin)
+  - Add tests for rocket middleware guards (AuthenticatedUser, RequireGroup, RequireAdmin)
+  - Add examples/password_management.rs demonstrating all 5 password API methods
+  - Update README.md with Password Management section and new model docs
+  - Coverage: 53.59% → 90%
+
+
+## [0.1.0] - 2026-01-05
+
+### Bug Fixes
+
+- fix docker compose
+
+### Features
+
+- add login, register, documentation and examples to use
+
+- add current user route
+
+- add check user and admin and generate token
+
+- add organization key for keyrunes v0.2.0
+
+### Miscellaneous Tasks
+
+- update Cargo.toml
+
+- update Cargo.toml
+
+### Other
+
+- Initial commit
 
 
 <!-- generated by git-cliff -->
