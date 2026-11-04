@@ -7,6 +7,45 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
+## [0.3.0] - 2026-11-04
+
+### Bug Fixes
+
+- **security**: make middleware authorization local, race-free and route-accurate (reported by Rathnadeepan / HotWater @HotWater-015)
+
+  The framework guards (axum, actix, rocket, loco) authenticated by
+  writing the caller's token into the shared Arc<KeyrunesClient> and
+  then reading the current user back: under concurrent requests one
+  request's token overwrote another's identity mid-flight. Added
+  KeyrunesClient::get_current_user_with_token, which sends the passed
+  token without touching the stored one, and all four guards use it.
+
+  The guards' group checks called the deprecated has_group, which hits
+  GET /api/users/{uid}/groups/{gid} - a route the server no longer has,
+  so every check failed with 404. They now read the group NAMES off the
+  user /api/me already returned, and RequireAdmin accepts the exact set
+  {admin, admins, superadmin} instead of only the old 'admins' literal.
+
+### Documentation
+
+- move middleware rationale notes into item rustdoc
+
+  Fold the per-request token race and the removed has_group route
+  explanations into the /// docs of the guards they belong to (loco.rs
+  already documented them that way) and drop the leftover section-marker
+  comments in client.rs. No behavior change: fmt, strict clippy and the
+  full --all-features suite pass.
+
+### Miscellaneous Tasks
+
+- **release**: bump version to 0.3.0
+
+  The release adds public API (get_current_user_with_token, refresh_token)
+  and deprecates register_admin and has_group, so the minor version is the
+  semantically correct bump. The deprecation notes are aligned with the new
+  version number and translated to English.
+
+
 ## [0.2.2] - 2026-10-23
 
 ### Miscellaneous Tasks
