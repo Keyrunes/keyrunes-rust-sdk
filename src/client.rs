@@ -35,6 +35,7 @@ const ENDPOINT_ME: &str = "/api/me";
 const ENDPOINT_FORGOT_PASSWORD: &str = "/api/forgot-password";
 const ENDPOINT_RESET_PASSWORD: &str = "/api/reset-password";
 const ENDPOINT_CHANGE_PASSWORD: &str = "/api/user/change-password";
+const ENDPOINT_REFRESH_TOKEN: &str = "/api/refresh-token";
 
 /// How many bytes of an unparseable error body are echoed back to the caller.
 const ERROR_BODY_PREVIEW_BYTES: usize = 200;
@@ -337,8 +338,111 @@ impl KeyrunesClient {
         Ok(crate::models::User::from(user_response))
     }
 
+    /// Gets the current authenticated user using a per-request token.
+    ///
+    /// Unlike [`KeyrunesClient::get_current_user`], this never writes to the
+    /// client's shared token state, so a `KeyrunesClient` wrapped in `Arc`
+    /// can serve concurrent requests with different tokens without one
+    /// request overwriting another's identity mid-flight. This is the form
+    /// middleware integrations must use.
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - JWT authentication token for this request only
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<User, KeyrunesError>`:
+    /// - `Ok(user)` if the server accepted the token
+    /// - `Err(KeyrunesError::AuthenticationError)` if the token is invalid
+    /// - `Err(KeyrunesError::NetworkError)` if there was a network error
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let user = client
+    ///     .get_current_user_with_token("eyJhbGciOiJIUzI1NiJ9...")
+    ///     .await?;
+    /// println!("Requesting user: {}", user.username);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_current_user_with_token(&self, token: &str) -> Result<User> {
+        let url = format!("{}{}", self.base_url, ENDPOINT_ME);
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await?;
+
+        let user_response = self
+            .handle_response::<crate::models::UserResponse>(response)
+            .await?;
+        Ok(crate::models::User::from(user_response))
+    }
+
+    /// Exchanges the current token for a fresh one.
+    ///
+    /// `POST /api/refresh-token`, authenticated with the client's stored
+    /// token in the `Authorization` header. Since server 0.4.1 the body is
+    /// ignored: the refreshed token is always bound to the authenticated
+    /// identity, never to a token string supplied in the payload.
+    ///
+    /// The fresh token replaces the stored one, so subsequent calls use it.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<Token, KeyrunesError>`:
+    /// - `Ok(token)` with the freshly issued token
+    /// - `Err(KeyrunesError::InvalidToken)` if no token is stored
+    /// - `Err(KeyrunesError::AuthenticationError)` if the server rejects it
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// client.login("user@example.com", "password123", None).await?;
+    /// let refreshed = client.refresh_token().await?;
+    /// println!("New token: {}", refreshed.token);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn refresh_token(&self) -> Result<Token> {
+        let token = self.token.read().await;
+        let token_value = token.as_ref().ok_or(KeyrunesError::InvalidToken)?.clone();
+        drop(token);
+
+        let url = format!("{}{}", self.base_url, ENDPOINT_REFRESH_TOKEN);
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token_value))
+            .send()
+            .await?;
+
+        let new_token = self.handle_response::<Token>(response).await?;
+        *self.token.write().await = Some(new_token.token.clone());
+        Ok(new_token)
+    }
+
     /// Registers a new administrator user.
     ///
+    /// # Deprecated
+    ///
+    /// Since server 0.4.2 (fix for C11-008) `POST /api/register` ignores
+    /// `admin_key` and never promotes the registered user. Administrators
+    /// are created by an existing admin through `POST /api/admin/user` or
+    /// by the server CLI. Kept for API compatibility only.
+    #[deprecated(
+        since = "0.2.3",
+        note = "server >= 0.4.2 ignores admin_key at /api/register and never promotes; create admins via /api/admin/user or the CLI"
+    )]
     /// # Arguments
     ///
     /// * `username` - Username
@@ -360,6 +464,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// #[allow(deprecated)]
     /// let admin = client.register_admin("admin_user", "admin@example.com", "password123", "admin-key-123", None).await?;
     /// println!("Admin registered: {} ({})", admin.username, admin.email);
     /// # Ok(())
@@ -393,6 +498,13 @@ impl KeyrunesClient {
     }
 
     /// Gets user information by ID.
+    ///
+    /// # Server support
+    ///
+    /// Current Keyrunes servers do not expose `GET /api/users/{id}`; calls
+    /// to another user's ID answer 404. Requesting the caller's own ID is
+    /// served from the verified `/api/me` response. Kept for API
+    /// compatibility with older deployments.
     ///
     /// # Arguments
     ///

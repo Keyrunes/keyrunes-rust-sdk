@@ -252,6 +252,9 @@ async fn test_get_current_user_unauthorized() {
 }
 
 #[tokio::test]
+// The test exists to prove the compatibility method still parses; the
+// deprecation itself is covered by its own assertion elsewhere.
+#[allow(deprecated)]
 async fn test_register_admin_success() {
     // #setup
     let mut server = Server::new_async().await;
@@ -898,6 +901,7 @@ async fn test_register_response_parsing() {
 }
 
 #[tokio::test]
+#[allow(deprecated)]
 async fn test_register_admin_response_parsing() {
     // #setup
     let mut server = Server::new_async().await;

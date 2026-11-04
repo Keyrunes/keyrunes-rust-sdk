@@ -50,10 +50,12 @@ impl FromRequestParts<KeyrunesState> for AuthenticatedUser {
 
         let keyrunes_state = state;
 
-        keyrunes_state.client.set_token(token.to_string()).await;
+        // Per-request token lookup: the shared client state is never
+        // mutated, so concurrent requests cannot overwrite each other's
+        // identity mid-flight.
         let user = keyrunes_state
             .client
-            .get_current_user()
+            .get_current_user_with_token(token)
             .await
             .map_err(|e| KeyrunesRejection::AuthError(e.to_string()))?;
 
@@ -86,16 +88,10 @@ impl FromRequestParts<KeyrunesState> for RequireGroup {
             .get("group_id")
             .ok_or(KeyrunesRejection::MissingGroup)?;
 
-        let keyrunes_state = state;
-
-        #[allow(deprecated)]
-        let has_group = keyrunes_state
-            .client
-            .has_group(&authenticated_user.user.id, group_id)
-            .await
-            .map_err(|e| KeyrunesRejection::AuthError(e.to_string()))?;
-
-        if !has_group {
+        // The user's groups were just fetched from the server via /api/me;
+        // checking them locally is both correct and avoids the removed
+        // GET /api/users/{uid}/groups/{gid} route (deprecated has_group).
+        if !authenticated_user.user.groups.iter().any(|g| g == group_id) {
             return Err(KeyrunesRejection::Forbidden(format!(
                 "User does not belong to group: {}",
                 group_id
@@ -124,16 +120,15 @@ impl FromRequestParts<KeyrunesState> for RequireAdmin {
     ) -> Result<Self, Self::Rejection> {
         let authenticated_user = AuthenticatedUser::from_request_parts(parts, state).await?;
 
-        let keyrunes_state = state;
-
-        #[allow(deprecated)]
-        let is_admin = keyrunes_state
-            .client
-            .has_group(&authenticated_user.user.id, "admins")
-            .await
-            .map_err(|e| KeyrunesRejection::AuthError(e.to_string()))?;
-
-        if !is_admin {
+        // Exact membership in the server's privileged group names. The old
+        // check ("admins" only, via the removed has_group route) denied real
+        // admins and hit a 404.
+        if !authenticated_user
+            .user
+            .groups
+            .iter()
+            .any(|g| matches!(g.as_str(), "admin" | "admins" | "superadmin"))
+        {
             return Err(KeyrunesRejection::Forbidden(
                 "Access denied: administrator privileges required".to_string(),
             ));
