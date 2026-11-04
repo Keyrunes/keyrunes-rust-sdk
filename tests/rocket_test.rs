@@ -25,6 +25,7 @@ mod rocket_tests {
             groups: vec!["users".to_string()],
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
+            ..Default::default()
         };
 
         let auth_user = AuthenticatedUser { user: user.clone() };
@@ -45,6 +46,7 @@ mod rocket_tests {
             groups: vec!["users".to_string(), "admins".to_string()],
             created_at: Some(Utc::now()),
             updated_at: Some(Utc::now()),
+            ..Default::default()
         };
 
         let auth_user = AuthenticatedUser { user };

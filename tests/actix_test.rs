@@ -119,6 +119,7 @@ mod actix_tests {
             groups: vec!["users".to_string()],
             created_at: Some(chrono::Utc::now()),
             updated_at: Some(chrono::Utc::now()),
+            ..Default::default()
         };
 
         let auth_user = AuthenticatedUser { user: user.clone() };
@@ -144,6 +145,7 @@ mod actix_tests {
                 groups: groups.iter().map(|g| g.to_string()).collect(),
                 created_at: None,
                 updated_at: None,
+                ..Default::default()
             },
         });
         req

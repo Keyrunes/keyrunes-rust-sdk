@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 /// User model
 ///
 /// Represents a user in the Keyrunes system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(from = "UserResponse")]
 pub struct User {
     /// Unique user ID
@@ -36,6 +36,16 @@ pub struct User {
     /// List of groups the user belongs to
     #[serde(default)]
     pub groups: Vec<String>,
+    /// Namespace the user belongs to.
+    ///
+    /// The server always reports it, so callers can assert that a user was
+    /// resolved inside the namespace they expected. It is `None` only when
+    /// talking to a server that predates multi-tenancy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<String>,
+    /// Organization the user belongs to, when the server reports one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organization_id: Option<i64>,
     /// User creation date
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
@@ -58,6 +68,10 @@ pub(crate) struct UserResponse {
     #[serde(default)]
     groups: Vec<String>,
     #[serde(default)]
+    namespace: Option<String>,
+    #[serde(default)]
+    organization_id: Option<i64>,
+    #[serde(default)]
     created_at: Option<DateTime<Utc>>,
     #[serde(default)]
     updated_at: Option<DateTime<Utc>>,
@@ -79,10 +93,28 @@ impl From<UserResponse> for User {
             username: response.username,
             email: response.email,
             groups: response.groups,
+            namespace: response.namespace,
+            organization_id: response.organization_id,
             created_at: response.created_at,
             updated_at: response.updated_at,
         }
     }
+}
+
+/// Authentication response returned by the login endpoint.
+///
+/// The server answers `POST /api/login` with the authenticated user next to
+/// the token, so callers that need the user's groups do not have to make a
+/// second round trip to `/api/me`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthResponse {
+    /// The authenticated user.
+    pub user: User,
+    /// The issued JWT.
+    pub token: String,
+    /// Whether the server requires a password change before the token is used.
+    #[serde(default)]
+    pub requires_password_change: bool,
 }
 
 /// Group model
@@ -198,6 +230,26 @@ pub struct UserRegistration {
     /// payloads without `namespace` with 422.
     #[serde(default = "default_namespace")]
     pub namespace: String,
+    /// Group to attach the new user to.
+    ///
+    /// When omitted, the server decides: the first user of an empty namespace
+    /// is granted `admin` (or `superadmin` in the `public` namespace). Callers
+    /// that register end users should pass an explicit, non-privileged group
+    /// such as `users`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+impl Default for UserRegistration {
+    fn default() -> Self {
+        Self {
+            username: String::new(),
+            email: String::new(),
+            password: String::new(),
+            namespace: DEFAULT_NAMESPACE.to_string(),
+            group: None,
+        }
+    }
 }
 
 /// Administrator registration data

@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Username: {}", username);
     println!("Email: {}", email);
 
-    match client.register(&username, &email, &password, None).await {
+    match client
+        .register(&username, &email, &password, None, None)
+        .await
+    {
         Ok(user) => println!("User registered: {} ({})", user.username, user.email),
         Err(e) => println!("x Error registering: {}", e),
     }

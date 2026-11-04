@@ -10,7 +10,7 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-//! let user = client.register("john", "john@example.com", "password123", None).await?;
+//! let user = client.register("john", "john@example.com", "password123", None, None).await?;
 //! let token = client.login("john@example.com", "password123", None).await?;
 //! # Ok(())
 //! # }
@@ -20,11 +20,19 @@ use crate::error::{KeyrunesError, Result};
 use crate::models::*;
 use reqwest::Client;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
-const USER_AGENT: &str = "keyrunes-rust-sdk/0.2.0";
+/// User agent sent with every request. Derived from the crate version so it
+/// never drifts from the published release.
+const USER_AGENT: &str = concat!("keyrunes-rust-sdk/", env!("CARGO_PKG_VERSION"));
 const HEADER_ORG_KEY: &str = "X-Organization-Key";
 const ENV_ORG_KEY: &str = "KEYRUNES_ORG_KEY";
+
+/// Default timeout applied to every request.
+///
+/// A hung Keyrunes instance must not hold a caller request open forever.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 const ENDPOINT_LOGIN: &str = "/api/login";
 const ENDPOINT_REGISTER: &str = "/api/register";
@@ -79,7 +87,7 @@ fn truncate_on_char_boundary(input: &str, max_bytes: usize) -> &str {
 /// # use keyrunes_rust_sdk::KeyrunesClient;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-/// let user = client.register("john", "john@example.com", "password123", None).await?;
+/// let user = client.register("john", "john@example.com", "password123", None, None).await?;
 /// let token = client.login("john@example.com", "password123", None).await?;
 /// println!("Token: {}", token.token);
 /// # Ok(())
@@ -133,6 +141,33 @@ impl KeyrunesClient {
     ///     .expect("Invalid URL");
     /// ```
     pub fn new<S: Into<String>>(base_url: S) -> Result<Self> {
+        Self::with_timeout(base_url, DEFAULT_TIMEOUT)
+    }
+
+    /// Creates a new client with an explicit request timeout.
+    ///
+    /// Use this when the caller needs a tighter bound than
+    /// [`DEFAULT_TIMEOUT`] — for example an HTTP service that must fail fast
+    /// when the identity provider is slow.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_url` - Base URL of the Keyrunes API (e.g., <https://keyrunes.example.com>)
+    /// * `timeout` - Maximum duration of a single request
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    /// use keyrunes_rust_sdk::KeyrunesClient;
+    ///
+    /// let client = KeyrunesClient::with_timeout(
+    ///     "https://keyrunes.example.com",
+    ///     Duration::from_secs(5),
+    /// )
+    /// .expect("Invalid URL");
+    /// ```
+    pub fn with_timeout<S: Into<String>>(base_url: S, timeout: Duration) -> Result<Self> {
         let base_url = base_url.into();
         url::Url::parse(&base_url)?;
 
@@ -148,6 +183,7 @@ impl KeyrunesClient {
             client: Client::builder()
                 .user_agent(USER_AGENT)
                 .default_headers(headers)
+                .timeout(timeout)
                 .build()?,
             token: Arc::new(RwLock::new(None)),
         })
@@ -221,6 +257,68 @@ impl KeyrunesClient {
         Ok(token)
     }
 
+    /// Performs login and returns both the token and the authenticated user.
+    ///
+    /// The login endpoint already answers with the user object next to the
+    /// token, so callers that need the user's groups do not have to spend a
+    /// second round trip on `/api/me`.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Username or email
+    /// * `password` - User password
+    /// * `namespace` - Optional namespace (defaults to "public")
+    ///
+    /// # Returns
+    ///
+    /// Returns `Result<(Token, User), KeyrunesError>`:
+    /// - `Ok((token, user))` if login was successful
+    /// - `Err(KeyrunesError::AuthenticationError)` if credentials are invalid
+    /// - `Err(KeyrunesError::NetworkError)` if there was a network error
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use keyrunes_rust_sdk::KeyrunesClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
+    /// let (token, user) = client
+    ///     .login_with_user("user@example.com", "password", Some("pixie"))
+    ///     .await?;
+    /// println!("Token: {} for {} in {:?}", token.token, user.username, user.namespace);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn login_with_user<S: Into<String>>(
+        &self,
+        username: S,
+        password: S,
+        namespace: Option<S>,
+    ) -> Result<(Token, User)> {
+        let url = format!("{}{}", self.base_url, ENDPOINT_LOGIN);
+        let credentials = LoginCredentials {
+            identity: username.into(),
+            password: password.into(),
+            namespace: namespace
+                .map(|n| n.into())
+                .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
+        };
+
+        let response = self.client.post(&url).json(&credentials).send().await?;
+
+        let auth = self.handle_response::<AuthResponse>(response).await?;
+        let token = Token {
+            token: auth.token,
+            token_type: None,
+            expires_in: None,
+            refresh_token: None,
+            expires_at: None,
+        };
+        let token_value = token.token.clone();
+        *self.token.write().await = Some(token_value);
+        Ok((token, auth.user))
+    }
+
     /// Registers a new user.
     ///
     /// The server responds `201 Created` with the new user's flat
@@ -232,6 +330,13 @@ impl KeyrunesClient {
     /// * `email` - User email
     /// * `password` - User password (minimum 8 characters)
     /// * `namespace` - Optional namespace (defaults to [`DEFAULT_NAMESPACE`], "public")
+    /// * `group` - Optional group to attach the user to
+    ///
+    /// The `group` argument is not cosmetic: when it is omitted the server
+    /// decides, and the first user registered in an empty namespace is granted
+    /// `admin` (or `superadmin` in the `public` namespace). Applications that
+    /// register end users should pass a non-privileged group such as
+    /// `users`.
     ///
     /// # Returns
     ///
@@ -246,7 +351,9 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let user = client.register("john_doe", "john@example.com", "password123", None).await?;
+    /// let user = client
+    ///     .register("john_doe", "john@example.com", "password123", Some("pixie"), Some("users"))
+    ///     .await?;
     /// println!("User registered: {} ({})", user.username, user.email);
     /// # Ok(())
     /// # }
@@ -257,6 +364,7 @@ impl KeyrunesClient {
         email: S,
         password: S,
         namespace: Option<S>,
+        group: Option<S>,
     ) -> Result<User> {
         let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
         let registration = UserRegistration {
@@ -266,6 +374,7 @@ impl KeyrunesClient {
             namespace: namespace
                 .map(|n| n.into())
                 .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
+            group: group.map(|g| g.into()),
         };
 
         let response = self.client.post(&url).json(&registration).send().await?;

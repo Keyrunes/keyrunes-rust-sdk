@@ -34,7 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Username: {}", username);
     println!("Email: {}", email);
 
-    let user_id = match client.register(&username, &email, &password, None).await {
+    let user_id = match client
+        .register(&username, &email, &password, None, None)
+        .await
+    {
         Ok(user) => {
             println!("User registered: {} ({})", user.username, user.id);
             user.id

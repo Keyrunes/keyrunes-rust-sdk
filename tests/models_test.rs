@@ -10,6 +10,7 @@ fn test_user_serialization() {
         groups: vec!["users".to_string(), "admins".to_string()],
         created_at: None,
         updated_at: None,
+        ..Default::default()
     };
 
     // #act
@@ -84,6 +85,7 @@ fn test_user_registration() {
         email: "john@example.com".to_string(),
         password: "password123".to_string(),
         namespace: "public".into(),
+        ..Default::default()
     };
 
     // #act
@@ -277,6 +279,7 @@ fn test_user_registration_always_serializes_namespace() {
         email: "john@example.com".to_string(),
         password: "password123".to_string(),
         namespace: DEFAULT_NAMESPACE.to_string(),
+        ..Default::default()
     };
 
     let json = serde_json::to_value(&registration).unwrap();
