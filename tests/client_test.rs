@@ -252,6 +252,68 @@ async fn test_get_current_user_unauthorized() {
 }
 
 #[tokio::test]
+async fn test_get_current_user_with_token_success() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer per-request-token-789")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"user_id":123,"username":"john","email":"john@example.com","groups":["users"]}"#,
+        )
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+    // No stored token: the per-call token must be the one sent.
+
+    // #act
+    let result = client
+        .get_current_user_with_token("per-request-token-789")
+        .await;
+
+    // #assert
+    assert!(result.is_ok());
+    let user = result.unwrap();
+    assert_eq!(user.id, "123");
+    assert_eq!(user.username, "john");
+    assert_eq!(user.email, "john@example.com");
+    assert_eq!(user.groups, vec!["users".to_string()]);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_current_user_with_token_unauthorized() {
+    // #setup
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("GET", "/api/me")
+        .match_header("authorization", "Bearer invalid-per-request-token")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"message":"Invalid token"}"#)
+        .create_async()
+        .await;
+
+    let client = KeyrunesClient::new(server.url()).unwrap();
+
+    // #act
+    let result = client
+        .get_current_user_with_token("invalid-per-request-token")
+        .await;
+
+    // #assert
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        KeyrunesError::AuthenticationError(_)
+    ));
+    mock.assert_async().await;
+}
+
+#[tokio::test]
 // The test exists to prove the compatibility method still parses; the
 // deprecation itself is covered by its own assertion elsewhere.
 #[allow(deprecated)]
