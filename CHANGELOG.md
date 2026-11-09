@@ -7,7 +7,15 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
-## [0.4.2] - 2026-11-09
+## [0.4.1] - 2026-11-09
+
+### Documentation
+
+- **changelog**: cut the 0.4.1 release section with git-cliff
+
+  Regenerated from the conventional commits of the 0.4.1 release.
+
+- **changelog**: cut the 0.4.2 release section with git-cliff
 
 ### Features
 
@@ -19,15 +27,6 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
   `login`, `login_with_user` and `register`, serialized only when set. The
   token is never stored on the shared client, so the C11-007 request-token
   race is not reintroduced.
-
-
-## [0.4.1] - 2026-11-09
-
-### Documentation
-
-- **changelog**: cut the 0.4.1 release section with git-cliff
-
-  Regenerated from the conventional commits of the 0.4.1 release.
 
 ### Miscellaneous Tasks
 
