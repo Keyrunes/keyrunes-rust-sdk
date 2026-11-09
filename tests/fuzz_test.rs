@@ -132,7 +132,7 @@ async fn error_body_with_multibyte_boundary_does_not_panic() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     assert!(matches!(result, Err(KeyrunesError::HttpError(_))));
@@ -154,7 +154,7 @@ async fn long_ascii_error_body_is_truncated_not_dropped() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     let message = result.unwrap_err().to_string();
@@ -184,7 +184,7 @@ async fn error_body_exactly_at_the_preview_limit_is_reported_verbatim() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     let message = result.unwrap_err().to_string();
@@ -213,7 +213,7 @@ async fn html_error_body_is_reported_as_a_wrong_endpoint() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     let message = result.unwrap_err().to_string();
@@ -234,7 +234,7 @@ async fn empty_error_body_does_not_panic() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     assert!(result.is_err());
@@ -255,7 +255,7 @@ async fn success_status_with_malformed_body_is_a_serialization_error() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
 
     // #assert
     assert!(matches!(result, Err(KeyrunesError::SerializationError(_))));
@@ -275,7 +275,7 @@ async fn not_found_is_classified_by_the_message_content() {
         .await;
 
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
     assert!(matches!(result, Err(KeyrunesError::UserNotFoundError(_))));
     user_mock.assert_async().await;
 
@@ -288,7 +288,7 @@ async fn not_found_is_classified_by_the_message_content() {
         .create_async()
         .await;
 
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
     assert!(matches!(result, Err(KeyrunesError::GroupNotFoundError(_))));
     group_mock.assert_async().await;
 
@@ -301,7 +301,7 @@ async fn not_found_is_classified_by_the_message_content() {
         .create_async()
         .await;
 
-    let result = client.login("user", "password", None).await;
+    let result = client.login("user", "password", None, None).await;
     assert!(matches!(result, Err(KeyrunesError::Other(_))));
     other_mock.assert_async().await;
 }

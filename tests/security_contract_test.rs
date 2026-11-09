@@ -45,6 +45,7 @@ async fn test_register_sends_the_requested_group() {
             "password123",
             Some("pixie"),
             Some("users"),
+            None,
         )
         .await;
 
@@ -79,6 +80,7 @@ async fn test_register_omits_group_when_none_is_given() {
             "password123",
             Some("pixie"),
             None,
+            None,
         )
         .await;
 
@@ -108,6 +110,7 @@ async fn test_register_exposes_namespace_and_organization() {
             "password123",
             Some("pixie"),
             Some("users"),
+            None,
         )
         .await
         .unwrap();
@@ -140,7 +143,7 @@ async fn test_login_with_user_returns_user_and_token_in_one_call() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let (token, user) = client
-        .login_with_user("john@example.com", "password123", Some("pixie"))
+        .login_with_user("john@example.com", "password123", Some("pixie"), None)
         .await
         .unwrap();
 
@@ -179,7 +182,7 @@ async fn test_login_with_user_stores_the_token_for_later_calls() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     client
-        .login_with_user("john@example.com", "password123", Some("pixie"))
+        .login_with_user("john@example.com", "password123", Some("pixie"), None)
         .await
         .unwrap();
     let me = client.get_current_user().await.unwrap();
@@ -208,7 +211,7 @@ async fn test_request_times_out_when_the_server_does_not_answer() {
         KeyrunesClient::with_timeout(format!("http://{}", address), Duration::from_millis(200))
             .unwrap();
     let result = client
-        .login("john@example.com", "password123", Some("pixie"))
+        .login("john@example.com", "password123", Some("pixie"), None)
         .await;
 
     // #assert
@@ -239,7 +242,7 @@ async fn test_user_agent_reports_the_crate_version() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("john@example.com", "password123", None).await;
+    let result = client.login("john@example.com", "password123", None, None).await;
 
     // #assert
     assert!(result.is_ok());

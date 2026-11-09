@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Email: {}", email);
 
     match client
-        .register(&username, &email, &password, None, None)
+        .register(&username, &email, &password, None, None, None)
         .await
     {
         Ok(user) => println!("User registered: {} ({})", user.username, user.email),
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\nLogging in...");
-    match client.login(&username, &password, None).await {
+    match client.login(&username, &password, None, None).await {
         Ok(token) => {
             println!("Login successful! Token: {}", token.token);
 

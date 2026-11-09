@@ -27,7 +27,7 @@ async fn test_login_success() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None).await;
+    let result = client.login("user@example.com", "password", None, None).await;
 
     // #assert
     assert!(result.is_ok());
@@ -51,7 +51,7 @@ async fn test_login_failure() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "wrong", None).await;
+    let result = client.login("user@example.com", "wrong", None, None).await;
 
     // #assert
     assert!(result.is_err());
@@ -78,7 +78,7 @@ async fn test_register_success() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None, None)
+        .register("john", "john@example.com", "password123", None, None, None)
         .await;
 
     // #assert
@@ -106,7 +106,7 @@ async fn test_register_failure() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let result = client
-        .register("john", "john@example.com", "password123", None, None)
+        .register("john", "john@example.com", "password123", None, None, None)
         .await;
 
     // #assert
@@ -139,11 +139,11 @@ async fn test_register_and_login_flow() {
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
     let user = client
-        .register("john", "john@example.com", "password123", None, None)
+        .register("john", "john@example.com", "password123", None, None, None)
         .await
         .unwrap();
     let token = client
-        .login("john@example.com", "password123", None)
+        .login("john@example.com", "password123", None, None)
         .await
         .unwrap();
 
@@ -786,7 +786,7 @@ async fn test_handle_error_html_response() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None).await;
+    let result = client.login("user@example.com", "password", None, None).await;
 
     // #assert
     assert!(result.is_err());
@@ -819,7 +819,7 @@ async fn test_handle_error_long_body_truncation() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None).await;
+    let result = client.login("user@example.com", "password", None, None).await;
 
     // #assert
     assert!(result.is_err());
@@ -950,6 +950,7 @@ async fn test_register_response_parsing() {
             "parseduser",
             "parsed@example.com",
             "password123",
+            None,
             None,
             None,
         )

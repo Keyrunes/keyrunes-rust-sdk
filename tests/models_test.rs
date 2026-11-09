@@ -67,6 +67,7 @@ fn test_login_credentials() {
         identity: "user@example.com".to_string(),
         password: "password123".to_string(),
         namespace: "public".into(),
+        recaptcha_response: None,
     };
 
     // #act
@@ -263,6 +264,7 @@ fn test_login_credentials_always_serializes_namespace() {
         identity: "user@example.com".to_string(),
         password: "password123".to_string(),
         namespace: DEFAULT_NAMESPACE.to_string(),
+        recaptcha_response: None,
     };
 
     let json = serde_json::to_value(&creds).unwrap();

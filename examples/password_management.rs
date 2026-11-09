@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Email: {}", email);
 
     let user_id = match client
-        .register(&username, &email, &password, None, None)
+        .register(&username, &email, &password, None, None, None)
         .await
     {
         Ok(user) => {
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Login to get a token for authenticated operations
     println!("\nLogging in to get token...");
-    match client.login(&username, &password, None).await {
+    match client.login(&username, &password, None, None).await {
         Ok(_token) => {
             println!("Login successful! Token obtained.");
 
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Login with new password to verify change worked
             println!("\n   Verifying password change by logging in with new password...");
-            match client.login(&username, &new_password, None).await {
+            match client.login(&username, &new_password, None, None).await {
                 Ok(_) => println!("   Password change verified!"),
                 Err(e) => println!("   x Password change failed: {}", e),
             }

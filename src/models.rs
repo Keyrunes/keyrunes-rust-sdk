@@ -13,6 +13,7 @@
 //!     identity: "user@example.com".to_string(),
 //!     password: "password123".to_string(),
 //!     namespace: "public".to_string(),
+//!     recaptcha_response: None,
 //! };
 //!
 //! let json = serde_json::to_string(&creds).unwrap();
@@ -238,6 +239,9 @@ pub struct UserRegistration {
     /// such as `users`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// reCAPTCHA response token, sent only when the server has captcha enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recaptcha_response: Option<String>,
 }
 
 impl Default for UserRegistration {
@@ -248,6 +252,7 @@ impl Default for UserRegistration {
             password: String::new(),
             namespace: DEFAULT_NAMESPACE.to_string(),
             group: None,
+            recaptcha_response: None,
         }
     }
 }
@@ -284,6 +289,9 @@ pub struct LoginCredentials {
     /// payloads without `namespace` with 422.
     #[serde(default = "default_namespace")]
     pub namespace: String,
+    /// reCAPTCHA response token, sent only when the server has captcha enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recaptcha_response: Option<String>,
 }
 
 /// Default namespace value: "public".

@@ -10,8 +10,8 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-//! let user = client.register("john", "john@example.com", "password123", None, None).await?;
-//! let token = client.login("john@example.com", "password123", None).await?;
+//! let user = client.register("john", "john@example.com", "password123", None, None, None).await?;
+//! let token = client.login("john@example.com", "password123", None, None).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -87,8 +87,8 @@ fn truncate_on_char_boundary(input: &str, max_bytes: usize) -> &str {
 /// # use keyrunes_rust_sdk::KeyrunesClient;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-/// let user = client.register("john", "john@example.com", "password123", None, None).await?;
-/// let token = client.login("john@example.com", "password123", None).await?;
+/// let user = client.register("john", "john@example.com", "password123", None, None, None).await?;
+/// let token = client.login("john@example.com", "password123", None, None).await?;
 /// println!("Token: {}", token.token);
 /// # Ok(())
 /// # }
@@ -229,7 +229,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password", None).await?;
+    /// let token = client.login("user@example.com", "password", None, None).await?;
     /// println!("Token: {}", token.token);
     /// # Ok(())
     /// # }
@@ -239,6 +239,7 @@ impl KeyrunesClient {
         username: S,
         password: S,
         namespace: Option<S>,
+        recaptcha_response: Option<String>,
     ) -> Result<Token> {
         let url = format!("{}{}", self.base_url, ENDPOINT_LOGIN);
         let credentials = LoginCredentials {
@@ -247,6 +248,7 @@ impl KeyrunesClient {
             namespace: namespace
                 .map(|n| n.into())
                 .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
+            recaptcha_response,
         };
 
         let response = self.client.post(&url).json(&credentials).send().await?;
@@ -283,7 +285,7 @@ impl KeyrunesClient {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let (token, user) = client
-    ///     .login_with_user("user@example.com", "password", Some("pixie"))
+    ///     .login_with_user("user@example.com", "password", Some("pixie"), None)
     ///     .await?;
     /// println!("Token: {} for {} in {:?}", token.token, user.username, user.namespace);
     /// # Ok(())
@@ -294,6 +296,7 @@ impl KeyrunesClient {
         username: S,
         password: S,
         namespace: Option<S>,
+        recaptcha_response: Option<String>,
     ) -> Result<(Token, User)> {
         let url = format!("{}{}", self.base_url, ENDPOINT_LOGIN);
         let credentials = LoginCredentials {
@@ -302,6 +305,7 @@ impl KeyrunesClient {
             namespace: namespace
                 .map(|n| n.into())
                 .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
+            recaptcha_response,
         };
 
         let response = self.client.post(&url).json(&credentials).send().await?;
@@ -352,7 +356,7 @@ impl KeyrunesClient {
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
     /// let user = client
-    ///     .register("john_doe", "john@example.com", "password123", Some("pixie"), Some("users"))
+    ///     .register("john_doe", "john@example.com", "password123", Some("pixie"), Some("users"), None)
     ///     .await?;
     /// println!("User registered: {} ({})", user.username, user.email);
     /// # Ok(())
@@ -365,6 +369,7 @@ impl KeyrunesClient {
         password: S,
         namespace: Option<S>,
         group: Option<S>,
+        recaptcha_response: Option<String>,
     ) -> Result<User> {
         let url = format!("{}{}", self.base_url, ENDPOINT_REGISTER);
         let registration = UserRegistration {
@@ -375,6 +380,7 @@ impl KeyrunesClient {
                 .map(|n| n.into())
                 .unwrap_or_else(|| DEFAULT_NAMESPACE.to_string()),
             group: group.map(|g| g.into()),
+            recaptcha_response,
         };
 
         let response = self.client.post(&url).json(&registration).send().await?;
@@ -420,7 +426,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// let token = client.login("user@example.com", "password123", None, None).await?;
     /// let user = client.get_current_user().await?;
     /// println!("Current user: {} ({})", user.username, user.email);
     /// # Ok(())
@@ -513,7 +519,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// client.login("user@example.com", "password123", None).await?;
+    /// client.login("user@example.com", "password123", None, None).await?;
     /// let refreshed = client.refresh_token().await?;
     /// println!("New token: {}", refreshed.token);
     /// # Ok(())
@@ -629,7 +635,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// let token = client.login("user@example.com", "password123", None, None).await?;
     /// let user = client.get_user("123").await?;
     /// println!("User: {} ({})", user.username, user.email);
     /// # Ok(())
@@ -726,7 +732,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// let token = client.login("user@example.com", "password123", None, None).await?;
     /// let has_access = client.current_user_has_group("admins").await?;
     /// if has_access {
     /// #     println!("User has admin access");
@@ -758,7 +764,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// let token = client.login("user@example.com", "password123", None, None).await?;
     /// let groups = client.get_user_groups(None::<&str>).await?;
     /// println!("User groups: {:?}", groups);
     /// # Ok(())
@@ -784,7 +790,7 @@ impl KeyrunesClient {
     /// # use keyrunes_rust_sdk::KeyrunesClient;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = KeyrunesClient::new("https://keyrunes.example.com")?;
-    /// let token = client.login("user@example.com", "password123", None).await?;
+    /// let token = client.login("user@example.com", "password123", None, None).await?;
     /// client.clear_token().await;
     /// # Ok(())
     /// # }
