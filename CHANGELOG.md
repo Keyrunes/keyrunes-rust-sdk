@@ -11,15 +11,17 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 
 ### Documentation
 
-- **changelog**: cut the 0.4.1 release section with git-cliff
+- regenerate the full history including 0.4.0
+
+- cut the 0.4.1 release section with git-cliff
 
   Regenerated from the conventional commits of the 0.4.1 release.
 
-- **changelog**: cut the 0.4.2 release section with git-cliff
+- cut the 0.4.2 release section with git-cliff
 
 ### Features
 
-- **client**: add optional reCAPTCHA response to login and register
+- add optional reCAPTCHA response to login and register
 
   The server now optionally verifies a Google reCAPTCHA token on
   /api/register and /api/login. The SDK forwards it per request through a
@@ -30,15 +32,21 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 
 ### Miscellaneous Tasks
 
-- **release**: bump version to 0.4.1
+- bump version to 0.4.1
 
   Patch release: adds direct tests for get_current_user_with_token so the
   core mutation pass no longer carries a surviving mutant. No public API
   change.
 
+- consolidate to 0.4.1 (mutant fix + reCAPTCHA)
+
+### Styling
+
+- apply cargo fmt to test call sites
+
 ### Testing
 
-- **client**: cover get_current_user_with_token against the default mutant
+- cover get_current_user_with_token against the default mutant
 
   The middleware guards already exercise get_current_user_with_token, but
   they compile only with their feature enabled, so the core mutation pass
@@ -54,40 +62,11 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
     KeyrunesError::AuthenticationError and is not swallowed.
 
 
-## [0.4.0] - 2026-11-04
-
-### Documentation
-
-- **changelog**: cut the 0.4.0 release section with git-cliff
-
-- **changelog**: regenerate the full history including 0.4.0
-
-### Features
-
-- [**breaking**] allow pinning the group on register and expose the namespace
-
-  The SDK could not express two things a multi-tenant caller needs, and
-  both were silent security gaps.
-
-  register() had no way to pass the group, so the server always decided
-  it. The server grants the first user of an empty namespace `admin` (and
-  `superadmin` in the `public` namespace), which means any application
-  that registered end users through the SDK could hand out admin rights
-  to whoever signed up first. register() now takes a `group` argument and
-  UserRegistration carries it; passing None omits the field entirely and
-  keeps the old server-side default.
-
-  The user model carried no namespace, so a client could not check which
-  tenant it had actually authenticated against - the exact check needed
-  after the namespace/organization_id confusion was fixed server-side.
-  User and UserResponse now carry `namespace` and `organization_id`.
-
-
-## [0.3.0] - 2026-11-04
+## [0.4.0] - 2026-11-09
 
 ### Bug Fixes
 
-- **security**: make middleware authorization local, race-free and route-accurate (reported by Rathnadeepan / HotWater @HotWater-015)
+- make middleware authorization local, race-free and route-accurate (reported by Rathnadeepan / HotWater @HotWater-015)
 
   The framework guards (axum, actix, rocket, loco) authenticated by
   writing the caller's token into the shared Arc<KeyrunesClient> and
@@ -112,11 +91,33 @@ entry, reword the commit message; to change the shape, edit `cliff.toml` and run
   comments in client.rs. No behavior change: fmt, strict clippy and the
   full --all-features suite pass.
 
-- **changelog**: cut the 0.3.0 release section with git-cliff
+- cut the 0.3.0 release section with git-cliff
+
+- cut the 0.4.0 release section with git-cliff
+
+### Features
+
+- [**breaking**] allow pinning the group on register and expose the namespace
+
+  The SDK could not express two things a multi-tenant caller needs, and
+  both were silent security gaps.
+
+  register() had no way to pass the group, so the server always decided
+  it. The server grants the first user of an empty namespace `admin` (and
+  `superadmin` in the `public` namespace), which means any application
+  that registered end users through the SDK could hand out admin rights
+  to whoever signed up first. register() now takes a `group` argument and
+  UserRegistration carries it; passing None omits the field entirely and
+  keeps the old server-side default.
+
+  The user model carried no namespace, so a client could not check which
+  tenant it had actually authenticated against - the exact check needed
+  after the namespace/organization_id confusion was fixed server-side.
+  User and UserResponse now carry `namespace` and `organization_id`.
 
 ### Miscellaneous Tasks
 
-- **release**: bump version to 0.3.0
+- bump version to 0.3.0
 
   The release adds public API (get_current_user_with_token, refresh_token)
   and deprecates register_admin and has_group, so the minor version is the
