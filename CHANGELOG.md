@@ -7,11 +7,41 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
+## [0.4.1] - 2026-11-09
+
+### Miscellaneous Tasks
+
+- **release**: bump version to 0.4.1
+
+  Patch release: adds direct tests for get_current_user_with_token so the
+  core mutation pass no longer carries a surviving mutant. No public API
+  change.
+
+### Testing
+
+- **client**: cover get_current_user_with_token against the default mutant
+
+  The middleware guards already exercise get_current_user_with_token, but
+  they compile only with their feature enabled, so the core mutation pass
+  excluded them and the function had no direct assertion. A surviving
+  mutant replaced the body with `Ok(Default::default())` without any test
+  noticing.
+
+  Add two tests that pin the per-request token contract:
+  - success: no stored token, the passed token is the one sent, and every
+    field of the returned User (id, username, email, groups) is asserted
+    against the server payload, so the Default mutant can no longer pass.
+  - unauthorized: a 401 from the server surfaces as
+    KeyrunesError::AuthenticationError and is not swallowed.
+
+
 ## [0.4.0] - 2026-11-04
 
 ### Documentation
 
 - **changelog**: cut the 0.4.0 release section with git-cliff
+
+- **changelog**: regenerate the full history including 0.4.0
 
 ### Features
 
