@@ -7,7 +7,27 @@ commit body. **Do not edit by hand**: the next run overwrites it. To change an
 entry, reword the commit message; to change the shape, edit `cliff.toml` and run
 `git cliff -o CHANGELOG.md`.
 
+## [0.4.2] - 2026-11-09
+
+### Features
+
+- **client**: add optional reCAPTCHA response to login and register
+
+  The server now optionally verifies a Google reCAPTCHA token on
+  /api/register and /api/login. The SDK forwards it per request through a
+  new trailing `recaptcha_response: Option<String>` parameter on
+  `login`, `login_with_user` and `register`, serialized only when set. The
+  token is never stored on the shared client, so the C11-007 request-token
+  race is not reintroduced.
+
+
 ## [0.4.1] - 2026-11-09
+
+### Documentation
+
+- **changelog**: cut the 0.4.1 release section with git-cliff
+
+  Regenerated from the conventional commits of the 0.4.1 release.
 
 ### Miscellaneous Tasks
 
