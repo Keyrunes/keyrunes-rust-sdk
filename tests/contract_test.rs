@@ -33,7 +33,9 @@ async fn test_login_payload_defaults_namespace_to_public_when_none() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password123", None, None).await;
+    let result = client
+        .login("user@example.com", "password123", None, None)
+        .await;
 
     // #assert
     assert!(result.is_ok());

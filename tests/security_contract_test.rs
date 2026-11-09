@@ -242,7 +242,9 @@ async fn test_user_agent_reports_the_crate_version() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("john@example.com", "password123", None, None).await;
+    let result = client
+        .login("john@example.com", "password123", None, None)
+        .await;
 
     // #assert
     assert!(result.is_ok());

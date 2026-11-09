@@ -27,7 +27,9 @@ async fn test_login_success() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None, None).await;
+    let result = client
+        .login("user@example.com", "password", None, None)
+        .await;
 
     // #assert
     assert!(result.is_ok());
@@ -786,7 +788,9 @@ async fn test_handle_error_html_response() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None, None).await;
+    let result = client
+        .login("user@example.com", "password", None, None)
+        .await;
 
     // #assert
     assert!(result.is_err());
@@ -819,7 +823,9 @@ async fn test_handle_error_long_body_truncation() {
 
     // #act
     let client = KeyrunesClient::new(server.url()).unwrap();
-    let result = client.login("user@example.com", "password", None, None).await;
+    let result = client
+        .login("user@example.com", "password", None, None)
+        .await;
 
     // #assert
     assert!(result.is_err());
