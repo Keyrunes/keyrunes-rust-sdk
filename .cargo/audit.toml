@@ -27,4 +27,25 @@ ignore = [
     # Re-check when actix-http or rocket_http moves to h2 0.4; at that point
     # this entry must be deleted rather than carried forward.
     "RUSTSEC-2026-0258",
+
+    # RUSTSEC-2026-0594 — "private cookie nonces can repeat in processes that
+    # fork".
+    #
+    # Fixed in cookie >= 0.18.3. This lockfile already pins 0.18.3 for the 0.18
+    # line (pulled via reqwest -> cookie_store). The advisory still fires for
+    # cookie 0.16.2, dragged in by one optional dependency with no fixed 0.16.x
+    # release (actix-web 4.20.0, the latest, still pins the 0.16 line):
+    #
+    #   actix-web -> cookie 0.16   (feature "actix")
+    #
+    # Not reachable from this SDK's own code. actix-web sits behind the
+    # non-default "actix" feature and exists only so the middleware module can
+    # name actix's request types; the SDK is an HTTP client and never builds an
+    # actix private/signed cookie jar, which is where the repeated-nonce
+    # weakness lives. A consumer who enables "actix" already depends on the
+    # framework directly and resolves cookie through their own lockfile.
+    #
+    # Re-check when actix-web moves to cookie >= 0.18.3; at that point this
+    # entry must be deleted rather than carried forward.
+    "RUSTSEC-2026-0594",
 ]
